@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Star, Plus, X, Film } from "lucide-react";
+import { Search, Star, Plus, X, Film, LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import AuthScreen from "@/components/AuthScreen";
 
 export default function Filmoteca() {
+  const [session, setSession] = useState(null);
+  const [carregandoSessao, setCarregandoSessao] = useState(true);
   const [filmes, setFilmes] = useState([]);
   const [carregandoFilmes, setCarregandoFilmes] = useState(true);
   const [aba, setAba] = useState("assistido");
@@ -14,10 +17,31 @@ export default function Filmoteca() {
   const [carregando, setCarregando] = useState(false);
   const [selecionado, setSelecionado] = useState(null);
   const [nota, setNota] = useState("");
+  const [salvando, setSalvando] = useState(false);
 
-  // carrega a lista do Supabase ao montar
+  // observa a sessão de autenticação
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setCarregandoSessao(false);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // carrega a lista do Supabase quando há um usuário logado
   useEffect(() => {
     async function carregar() {
+      if (!session) {
+        setFilmes([]);
+        setCarregandoFilmes(false);
+        return;
+      }
+      setCarregandoFilmes(true);
       const { data, error } = await supabase
         .from("filmes")
         .select("*")
@@ -30,7 +54,11 @@ export default function Filmoteca() {
       setCarregandoFilmes(false);
     }
     carregar();
-  }, []);
+  }, [session]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+  }
 
   // busca na API do TMDb enquanto o usuário digita
   useEffect(() => {
@@ -59,7 +87,7 @@ export default function Filmoteca() {
   }
 
   async function confirmarAdicao(status) {
-    if (!selecionado) return;
+    if (!selecionado || salvando) return;
     const jaExiste = filmes.some((f) => f.id === selecionado.id);
     if (jaExiste) {
       setModalAberto(false);
@@ -67,6 +95,7 @@ export default function Filmoteca() {
       setBusca("");
       return;
     }
+    setSalvando(true);
     const novoFilme = {
       id: selecionado.id,
       title: selecionado.title,
@@ -76,12 +105,14 @@ export default function Filmoteca() {
       overview: selecionado.overview || null,
       status,
       rating: status === "assistido" && nota ? Number(nota) : null,
+      user_id: session.user.id,
     };
     const { data, error } = await supabase
       .from("filmes")
       .insert(novoFilme)
       .select()
       .single();
+    setSalvando(false);
     if (error) {
       console.error("Erro ao adicionar filme:", error);
       alert("Não foi possível salvar o filme. Tente novamente.");
@@ -119,12 +150,33 @@ export default function Filmoteca() {
     );
   }
 
+  if (carregandoSessao) {
+    return (
+      <div className="min-h-screen bg-[#12100E] text-[#F1EEE6] flex items-center justify-center">
+        <p className="text-[#8A857C] text-sm">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen />;
+  }
+
   return (
     <div className="min-h-screen bg-[#12100E] text-[#F1EEE6] p-6">
       <div className="max-w-md mx-auto pb-20">
-        <header className="flex items-center gap-2 mb-5 pt-1">
-          <Film className="w-5 h-5 text-[#D97757]" />
-          <h1 className="text-2xl font-bold tracking-wide">MINHA FILMOTECA</h1>
+        <header className="flex items-center justify-between gap-2 mb-5 pt-1">
+          <div className="flex items-center gap-2">
+            <Film className="w-5 h-5 text-[#D97757]" />
+            <h1 className="text-2xl font-bold tracking-wide">MINHA FILMOTECA</h1>
+          </div>
+          <button
+            onClick={handleLogout}
+            aria-label="Sair"
+            className="text-[#8A857C] hover:text-[#F1EEE6] transition p-1"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </header>
 
         <div className="flex gap-1 mb-5 bg-[#1B1815] rounded-lg p-1 border border-[#2A2622]">
@@ -293,15 +345,17 @@ export default function Filmoteca() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => confirmarAdicao("quero")}
-                    className="flex-1 border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-md hover:border-[#D97757] transition"
+                    disabled={salvando}
+                    className="flex-1 border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-md hover:border-[#D97757] transition disabled:opacity-60"
                   >
                     Quero assistir
                   </button>
                   <button
                     onClick={() => confirmarAdicao("assistido")}
-                    className="flex-1 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition"
+                    disabled={salvando}
+                    className="flex-1 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition disabled:opacity-60"
                   >
-                    Já assisti
+                    {salvando ? "Salvando..." : "Já assisti"}
                   </button>
                 </div>
               </>
