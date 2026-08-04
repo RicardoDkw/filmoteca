@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
 import Onboarding from "@/components/Onboarding";
+import Roleta from "@/components/Roleta";
 
 const CORES_CONFETE = ["#D97757", "#E5896D", "#F1EEE6"];
 
@@ -87,6 +88,8 @@ export default function Filmoteca() {
   const [recomendacoes, setRecomendacoes] = useState([]);
   const [assinaturaRecomendacoes, setAssinaturaRecomendacoes] = useState(null);
   const [salvandoRecomendacao, setSalvandoRecomendacao] = useState(null);
+  const [roletaAberta, setRoletaAberta] = useState(false);
+  const [roletaVisivel, setRoletaVisivel] = useState(false);
 
   // observa a sessão de autenticação
   useEffect(() => {
@@ -299,6 +302,22 @@ export default function Filmoteca() {
   function fecharDetalhe() {
     setDetalheVisivel(false);
     setTimeout(() => setDetalheAberto(null), 250);
+  }
+
+  function abrirRoleta() {
+    setRoletaAberta(true);
+    requestAnimationFrame(() => setRoletaVisivel(true));
+  }
+
+  function fecharRoleta() {
+    setRoletaVisivel(false);
+    setTimeout(() => setRoletaAberta(false), 250);
+  }
+
+  function verDetalhesDaRoleta(filme) {
+    setRoletaVisivel(false);
+    setRoletaAberta(false);
+    abrirDetalhe(filme);
   }
 
   function celebrar() {
@@ -607,77 +626,87 @@ export default function Filmoteca() {
               Nada por aqui ainda. Toque no + para adicionar.
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {lista.map((f) => {
-                const providers = providersMap[`${f.id}-${f.media_type}`];
-                const destaqueProvider =
-                  providers?.flatrate?.[0] || providers?.rent?.[0] || providers?.buy?.[0];
-                return (
-                  <div
-                    key={f.id}
-                    onClick={() => abrirDetalhe(f)}
-                    className="group relative bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10 active:scale-95"
-                  >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        remover(f.id);
-                      }}
-                      aria-label="Remover filme"
-                      className="absolute top-1 right-1 z-10 w-11 h-11 flex items-center justify-center"
+            <>
+              {aba === "quero" && lista.length >= 2 && (
+                <button
+                  onClick={abrirRoleta}
+                  className="w-full mb-3 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-md bg-[#1B1815] border border-[#2A2622] hover:border-[#D97757] transition"
+                >
+                  🎲 Sortear
+                </button>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                {lista.map((f) => {
+                  const providers = providersMap[`${f.id}-${f.media_type}`];
+                  const destaqueProvider =
+                    providers?.flatrate?.[0] || providers?.rent?.[0] || providers?.buy?.[0];
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() => abrirDetalhe(f)}
+                      className="group relative bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10 active:scale-95"
                     >
-                      <span className="bg-black/60 rounded-full p-1.5">
-                        <X className="w-3.5 h-3.5" />
-                      </span>
-                    </button>
-                    <div className="relative">
-                      <img
-                        src={f.poster}
-                        alt={f.title}
-                        className="w-full aspect-[2/3] object-cover"
-                      />
-                      {destaqueProvider && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          remover(f.id);
+                        }}
+                        aria-label="Remover filme"
+                        className="absolute top-1 right-1 z-10 w-11 h-11 flex items-center justify-center"
+                      >
+                        <span className="bg-black/60 rounded-full p-1.5">
+                          <X className="w-3.5 h-3.5" />
+                        </span>
+                      </button>
+                      <div className="relative">
                         <img
-                          src={destaqueProvider.logo}
-                          alt={destaqueProvider.name}
-                          title={destaqueProvider.name}
-                          className="absolute bottom-2 left-2 w-6 h-6 rounded shadow-md"
+                          src={f.poster}
+                          alt={f.title}
+                          className="w-full aspect-[2/3] object-cover"
                         />
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <p className="font-medium text-sm leading-tight">{f.title}</p>
-                      <p className="text-xs text-[#8A857C] mt-0.5">{f.year}</p>
-                      {f.overview && (
-                        <p className="text-xs text-[#8A857C] mt-1.5 line-clamp-2">{f.overview}</p>
-                      )}
+                        {destaqueProvider && (
+                          <img
+                            src={destaqueProvider.logo}
+                            alt={destaqueProvider.name}
+                            title={destaqueProvider.name}
+                            className="absolute bottom-2 left-2 w-6 h-6 rounded shadow-md"
+                          />
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <p className="font-medium text-sm leading-tight">{f.title}</p>
+                        <p className="text-xs text-[#8A857C] mt-0.5">{f.year}</p>
+                        {f.overview && (
+                          <p className="text-xs text-[#8A857C] mt-1.5 line-clamp-2">{f.overview}</p>
+                        )}
 
-                      {f.status === "assistido" ? (
-                        <div className="flex items-center gap-1 mt-2 text-[#D97757] font-medium text-sm">
-                          <Star className="w-3.5 h-3.5 fill-[#D97757]" />
-                          {f.rating ?? "—"}/10
-                        </div>
-                      ) : (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {[6, 7, 8, 9, 10].map((n) => (
-                            <button
-                              key={n}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                avaliar(f.id, n);
-                              }}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition"
-                            >
-                              {n}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                        {f.status === "assistido" ? (
+                          <div className="flex items-center gap-1 mt-2 text-[#D97757] font-medium text-sm">
+                            <Star className="w-3.5 h-3.5 fill-[#D97757]" />
+                            {f.rating ?? "—"}/10
+                          </div>
+                        ) : (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {[6, 7, 8, 9, 10].map((n) => (
+                              <button
+                                key={n}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  avaliar(f.id, n);
+                                }}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition"
+                              >
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            </>
           )}
         </div>
 
@@ -817,6 +846,15 @@ export default function Filmoteca() {
       {confeteAtivo && <Confete onFim={() => setConfeteAtivo(false)} />}
 
       {mostrarOnboarding && <Onboarding onFinalizar={finalizarOnboarding} />}
+
+      {roletaAberta && (
+        <Roleta
+          lista={filmes.filter((f) => f.status === "quero")}
+          visivel={roletaVisivel}
+          onClose={fecharRoleta}
+          onVerDetalhes={verDetalhesDaRoleta}
+        />
+      )}
     </div>
   );
 }
