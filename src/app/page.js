@@ -7,6 +7,7 @@ import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
+import { GENEROS_TMDB } from "@/lib/genres";
 
 const CORES_CONFETE = ["#D97757", "#E5896D", "#F1EEE6"];
 
@@ -90,6 +91,9 @@ export default function Filmoteca() {
   const [salvandoRecomendacao, setSalvandoRecomendacao] = useState(null);
   const [roletaAberta, setRoletaAberta] = useState(false);
   const [roletaVisivel, setRoletaVisivel] = useState(false);
+  const [generoSelecionado, setGeneroSelecionado] = useState(null);
+  const [sugestoesGenero, setSugestoesGenero] = useState([]);
+  const [generoCarregado, setGeneroCarregado] = useState(null);
 
   // observa a sessão de autenticação
   useEffect(() => {
@@ -198,6 +202,7 @@ export default function Filmoteca() {
   );
   const carregandoRecomendacoes =
     aba === "descobrir" &&
+    generoSelecionado === null &&
     candidatosRecomendacao.length > 0 &&
     assinaturaAtual !== assinaturaRecomendacoes;
 
@@ -226,6 +231,35 @@ export default function Filmoteca() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carregandoRecomendacoes]);
+
+  const sugestoesGeneroFiltradas = sugestoesGenero.filter(
+    (r) => !filmes.some((f) => f.id === r.id)
+  );
+  const carregandoGenero = generoSelecionado !== null && generoSelecionado !== generoCarregado;
+
+  // busca sugestões de um gênero escolhido manualmente; refaz quando o gênero muda
+  useEffect(() => {
+    if (!carregandoGenero) return;
+    let ativo = true;
+    fetch("/api/discover-genre", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ genreId: generoSelecionado, excluirIds: filmes.map((f) => f.id) }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!ativo) return;
+        setSugestoesGenero(data.results || []);
+        setGeneroCarregado(generoSelecionado);
+      });
+    return () => {
+      ativo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregandoGenero]);
+
+  const carregandoDescobrir = generoSelecionado !== null ? carregandoGenero : carregandoRecomendacoes;
+  const itensDescobrir = generoSelecionado !== null ? sugestoesGeneroFiltradas : recomendacoesFiltradas;
 
   // busca gêneros de itens antigos que ainda não têm (backfill) ao abrir Estatísticas
   useEffect(() => {
@@ -457,6 +491,7 @@ export default function Filmoteca() {
     }
     setFilmes((atual) => [...atual, data]);
     setRecomendacoes((atual) => atual.filter((r) => r.id !== item.id));
+    setSugestoesGenero((atual) => atual.filter((r) => r.id !== item.id));
   }
 
   if (carregandoSessao) {
@@ -575,52 +610,87 @@ export default function Filmoteca() {
               </div>
             </div>
           ) : aba === "descobrir" ? (
-            candidatosRecomendacao.length === 0 ? (
-              <p className="text-[#8A857C] text-center py-16 text-sm">
-                Avalie alguns filmes com nota alta para receber recomendações.
-              </p>
-            ) : carregandoRecomendacoes ? (
-              <div className="flex items-center justify-center gap-2 py-16">
-                <div className="w-4 h-4 border-2 border-[#2A2622] border-t-[#D97757] rounded-full animate-spin" />
-                <span className="text-xs text-[#8A857C]">Buscando recomendações...</span>
-              </div>
-            ) : recomendacoesFiltradas.length === 0 ? (
-              <p className="text-[#8A857C] text-center py-16 text-sm">
-                Nenhuma recomendação encontrada por enquanto.
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {recomendacoesFiltradas.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10"
+            <div>
+              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-1">
+                {GENEROS_TMDB.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() =>
+                      setGeneroSelecionado(generoSelecionado === g.id ? null : g.id)
+                    }
+                    className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition ${
+                      generoSelecionado === g.id
+                        ? "bg-[#D97757] text-[#12100E]"
+                        : "bg-[#1B1815] border border-[#2A2622] text-[#8A857C] hover:border-[#D97757]"
+                    }`}
                   >
-                    <img
-                      src={item.poster}
-                      alt={item.title}
-                      className="w-full aspect-[2/3] object-cover"
-                    />
-                    <div className="p-3">
-                      <p className="font-medium text-sm leading-tight">{item.title}</p>
-                      <p className="text-xs text-[#8A857C] mt-0.5">{item.year}</p>
-                      {item.overview && (
-                        <p className="text-xs text-[#8A857C] mt-1.5 line-clamp-2">
-                          {item.overview}
-                        </p>
-                      )}
-                      <button
-                        onClick={() => adicionarRecomendacao(item)}
-                        disabled={salvandoRecomendacao === item.id}
-                        className="mt-2 w-full flex items-center justify-center gap-1 text-xs font-medium py-1.5 rounded-md bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition disabled:opacity-60"
-                      >
-                        <Plus className="w-3 h-3" />
-                        {salvandoRecomendacao === item.id ? "Adicionando..." : "Quero ver"}
-                      </button>
-                    </div>
-                  </div>
+                    {g.label}
+                  </button>
                 ))}
               </div>
-            )
+
+              {generoSelecionado !== null && (
+                <button
+                  onClick={() => setGeneroSelecionado(null)}
+                  className="text-xs text-[#8A857C] hover:text-[#F1EEE6] transition mb-3"
+                >
+                  Limpar filtro
+                </button>
+              )}
+
+              {generoSelecionado === null && candidatosRecomendacao.length === 0 ? (
+                <p className="text-[#8A857C] text-center py-16 text-sm">
+                  Avalie alguns filmes com nota alta para receber recomendações.
+                </p>
+              ) : carregandoDescobrir ? (
+                <div className="flex items-center justify-center gap-2 py-16">
+                  <div className="w-4 h-4 border-2 border-[#2A2622] border-t-[#D97757] rounded-full animate-spin" />
+                  <span className="text-xs text-[#8A857C]">
+                    {generoSelecionado !== null
+                      ? "Buscando sugestões..."
+                      : "Buscando recomendações..."}
+                  </span>
+                </div>
+              ) : itensDescobrir.length === 0 ? (
+                <p className="text-[#8A857C] text-center py-16 text-sm">
+                  {generoSelecionado !== null
+                    ? "Nenhuma sugestão encontrada para esse gênero."
+                    : "Nenhuma recomendação encontrada por enquanto."}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {itensDescobrir.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10"
+                    >
+                      <img
+                        src={item.poster}
+                        alt={item.title}
+                        className="w-full aspect-[2/3] object-cover"
+                      />
+                      <div className="p-3">
+                        <p className="font-medium text-sm leading-tight">{item.title}</p>
+                        <p className="text-xs text-[#8A857C] mt-0.5">{item.year}</p>
+                        {item.overview && (
+                          <p className="text-xs text-[#8A857C] mt-1.5 line-clamp-2">
+                            {item.overview}
+                          </p>
+                        )}
+                        <button
+                          onClick={() => adicionarRecomendacao(item)}
+                          disabled={salvandoRecomendacao === item.id}
+                          className="mt-2 w-full flex items-center justify-center gap-1 text-xs font-medium py-1.5 rounded-md bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition disabled:opacity-60"
+                        >
+                          <Plus className="w-3 h-3" />
+                          {salvandoRecomendacao === item.id ? "Adicionando..." : "Quero ver"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           ) : lista.length === 0 ? (
             <p className="text-[#8A857C] text-center py-16 text-sm">
               Nada por aqui ainda. Toque no + para adicionar.
