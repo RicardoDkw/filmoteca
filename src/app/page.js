@@ -55,6 +55,15 @@ function SkeletonCard() {
   );
 }
 
+function embaralhar(lista) {
+  const copia = [...lista];
+  for (let i = copia.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+  }
+  return copia;
+}
+
 export default function Filmoteca() {
   const [session, setSession] = useState(null);
   const [carregandoSessao, setCarregandoSessao] = useState(true);
@@ -73,6 +82,9 @@ export default function Filmoteca() {
   const [modalVisivel, setModalVisivel] = useState(false);
   const [providersMap, setProvidersMap] = useState({});
   const [confeteAtivo, setConfeteAtivo] = useState(false);
+  const [recomendacoes, setRecomendacoes] = useState([]);
+  const [assinaturaRecomendacoes, setAssinaturaRecomendacoes] = useState(null);
+  const [salvandoRecomendacao, setSalvandoRecomendacao] = useState(null);
 
   // observa a sessão de autenticação
   useEffect(() => {
@@ -156,6 +168,45 @@ export default function Filmoteca() {
       }, {})
   ).sort((a, b) => b[1] - a[1]);
   const maiorContagemGenero = generoContagem[0]?.[1] || 1;
+
+  const candidatosRecomendacao = assistidos.filter((f) => f.rating >= 8);
+  const assinaturaAtual = candidatosRecomendacao
+    .map((f) => `${f.id}:${f.rating}`)
+    .sort()
+    .join(",");
+  const recomendacoesFiltradas = recomendacoes.filter(
+    (r) => !filmes.some((f) => f.id === r.id)
+  );
+  const carregandoRecomendacoes =
+    aba === "descobrir" &&
+    candidatosRecomendacao.length > 0 &&
+    assinaturaAtual !== assinaturaRecomendacoes;
+
+  // busca recomendações do TMDb com base nos filmes mais bem avaliados, com cache
+  // simples: só refaz a chamada quando o conjunto de assistidos com nota >= 8 muda
+  useEffect(() => {
+    if (!carregandoRecomendacoes) return;
+    const referencias = embaralhar(candidatosRecomendacao)
+      .sort((a, b) => b.rating - a.rating)
+      .slice(0, 3)
+      .map((f) => ({ id: f.id, media_type: f.media_type }));
+    let ativo = true;
+    fetch("/api/discover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ referencias, excluirIds: filmes.map((f) => f.id) }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!ativo) return;
+        setRecomendacoes(data.results || []);
+        setAssinaturaRecomendacoes(assinaturaAtual);
+      });
+    return () => {
+      ativo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregandoRecomendacoes]);
 
   // busca gêneros de itens antigos que ainda não têm (backfill) ao abrir Estatísticas
   useEffect(() => {
@@ -305,6 +356,38 @@ export default function Filmoteca() {
     if (valor === 10) celebrar();
   }
 
+  async function adicionarRecomendacao(item) {
+    if (salvandoRecomendacao || filmes.some((f) => f.id === item.id)) return;
+    setSalvandoRecomendacao(item.id);
+    const detalhesRes = await fetch(`/api/details?id=${item.id}&type=${item.mediaType}`);
+    const detalhes = await detalhesRes.json();
+    const novoFilme = {
+      id: item.id,
+      title: item.title,
+      year: item.year,
+      poster: item.poster,
+      media_type: item.mediaType,
+      overview: item.overview || null,
+      status: "quero",
+      rating: null,
+      user_id: session.user.id,
+      genres: detalhes.genres || [],
+    };
+    const { data, error } = await supabase
+      .from("filmes")
+      .insert(novoFilme)
+      .select()
+      .single();
+    setSalvandoRecomendacao(null);
+    if (error) {
+      console.error("Erro ao adicionar recomendação:", error);
+      alert("Não foi possível salvar o filme. Tente novamente.");
+      return;
+    }
+    setFilmes((atual) => [...atual, data]);
+    setRecomendacoes((atual) => atual.filter((r) => r.id !== item.id));
+  }
+
   if (carregandoSessao) {
     return (
       <div className="min-h-screen bg-[#12100E] text-[#F1EEE6] flex items-center justify-center">
@@ -338,17 +421,18 @@ export default function Filmoteca() {
           {[
             { key: "assistido", label: "Assistidos" },
             { key: "quero", label: "Quero ver" },
+            { key: "descobrir", label: "Descobrir" },
             { key: "estatisticas", label: "Estatísticas" },
           ].map((t) => (
             <button
               key={t.key}
               onClick={() => setAba(t.key)}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
+              className={`flex-1 py-2 text-xs sm:text-sm font-medium rounded-md transition ${
                 aba === t.key ? "bg-[#D97757] text-[#12100E]" : "text-[#8A857C]"
               }`}
             >
               {t.label}
-              {t.key !== "estatisticas" &&
+              {(t.key === "assistido" || t.key === "quero") &&
                 ` (${filmes.filter((f) => f.status === t.key).length})`}
             </button>
           ))}
@@ -419,6 +503,53 @@ export default function Filmoteca() {
                 )}
               </div>
             </div>
+          ) : aba === "descobrir" ? (
+            candidatosRecomendacao.length === 0 ? (
+              <p className="text-[#8A857C] text-center py-16 text-sm">
+                Avalie alguns filmes com nota alta para receber recomendações.
+              </p>
+            ) : carregandoRecomendacoes ? (
+              <div className="flex items-center justify-center gap-2 py-16">
+                <div className="w-4 h-4 border-2 border-[#2A2622] border-t-[#D97757] rounded-full animate-spin" />
+                <span className="text-xs text-[#8A857C]">Buscando recomendações...</span>
+              </div>
+            ) : recomendacoesFiltradas.length === 0 ? (
+              <p className="text-[#8A857C] text-center py-16 text-sm">
+                Nenhuma recomendação encontrada por enquanto.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {recomendacoesFiltradas.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10"
+                  >
+                    <img
+                      src={item.poster}
+                      alt={item.title}
+                      className="w-full aspect-[2/3] object-cover"
+                    />
+                    <div className="p-3">
+                      <p className="font-medium text-sm leading-tight">{item.title}</p>
+                      <p className="text-xs text-[#8A857C] mt-0.5">{item.year}</p>
+                      {item.overview && (
+                        <p className="text-xs text-[#8A857C] mt-1.5 line-clamp-2">
+                          {item.overview}
+                        </p>
+                      )}
+                      <button
+                        onClick={() => adicionarRecomendacao(item)}
+                        disabled={salvandoRecomendacao === item.id}
+                        className="mt-2 w-full flex items-center justify-center gap-1 text-xs font-medium py-1.5 rounded-md bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition disabled:opacity-60"
+                      >
+                        <Plus className="w-3 h-3" />
+                        {salvandoRecomendacao === item.id ? "Adicionando..." : "Quero ver"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           ) : lista.length === 0 ? (
             <p className="text-[#8A857C] text-center py-16 text-sm">
               Nada por aqui ainda. Toque no + para adicionar.
