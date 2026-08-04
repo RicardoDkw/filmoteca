@@ -331,10 +331,25 @@ export default function Filmoteca() {
   }
 
   async function remover(id) {
-    const { error } = await supabase.from("filmes").delete().eq("id", id);
+    const { data, error } = await supabase
+      .from("filmes")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", session.user.id)
+      .select();
     if (error) {
       console.error("Erro ao remover filme:", error);
       alert("Não foi possível remover o filme. Tente novamente.");
+      return;
+    }
+    if (!data || data.length === 0) {
+      console.error("Delete não afetou nenhuma linha (possível policy de DELETE ausente no Supabase):", {
+        id,
+        user_id: session.user.id,
+      });
+      alert(
+        "O filme não foi removido — o Supabase não confirmou a exclusão (provável falta de policy de DELETE). Veja o console."
+      );
       return;
     }
     setFilmes(filmes.filter((f) => f.id !== id));
@@ -571,9 +586,12 @@ export default function Filmoteca() {
                         e.stopPropagation();
                         remover(f.id);
                       }}
-                      className="absolute top-2 right-2 z-10 bg-black/60 rounded-full p-1"
+                      aria-label="Remover filme"
+                      className="absolute top-1 right-1 z-10 w-11 h-11 flex items-center justify-center"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <span className="bg-black/60 rounded-full p-1.5">
+                        <X className="w-3.5 h-3.5" />
+                      </span>
                     </button>
                     <div className="relative">
                       <img
