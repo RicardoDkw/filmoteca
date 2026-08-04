@@ -24,7 +24,7 @@ function GrupoProviders({ titulo, lista }) {
   );
 }
 
-export default function DetailsModal({ filme, onClose }) {
+export default function DetailsModal({ filme, visivel, onClose }) {
   const [providers, setProviders] = useState(null);
   const carregando = providers === null;
 
@@ -47,8 +47,18 @@ export default function DetailsModal({ filme, onClose }) {
     providers.buy.length === 0;
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50">
-      <div className="bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto">
+    <div
+      className={`fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 transition-opacity duration-[250ms] ${
+        visivel ? "opacity-100" : "opacity-0 pointer-events-none"
+      }`}
+    >
+      <div
+        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
+          visivel
+            ? "translate-y-0 sm:scale-100 opacity-100"
+            : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
+        }`}
+      >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold">Detalhes</h2>
           <button onClick={onClose}>
@@ -93,7 +103,10 @@ export default function DetailsModal({ filme, onClose }) {
         <div className="border-t border-[#2A2622] pt-3">
           <p className="text-sm font-medium mb-2">Onde assistir</p>
           {carregando ? (
-            <p className="text-xs text-[#8A857C]">Buscando...</p>
+            <div className="flex items-center gap-2 py-1">
+              <div className="w-4 h-4 border-2 border-[#2A2622] border-t-[#D97757] rounded-full animate-spin" />
+              <span className="text-xs text-[#8A857C]">Buscando...</span>
+            </div>
           ) : semProviders ? (
             <p className="text-xs text-[#8A857C]">Não disponível no Brasil.</p>
           ) : (

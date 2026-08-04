@@ -6,6 +6,55 @@ import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
 
+const CORES_CONFETE = ["#D97757", "#E5896D", "#F1EEE6"];
+
+function Confete({ onFim }) {
+  const [pecas] = useState(() =>
+    Array.from({ length: 24 }, () => ({
+      left: Math.random() * 100,
+      cor: CORES_CONFETE[Math.floor(Math.random() * CORES_CONFETE.length)],
+      atraso: Math.random() * 200,
+      duracao: 900 + Math.random() * 500,
+      tamanho: 5 + Math.random() * 4,
+    }))
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(onFim, 1500);
+    return () => clearTimeout(timer);
+  }, [onFim]);
+
+  return (
+    <div className="fixed inset-0 z-[60] pointer-events-none overflow-hidden">
+      {pecas.map((p, i) => (
+        <span
+          key={i}
+          className="absolute top-0 rounded-sm"
+          style={{
+            left: `${p.left}%`,
+            width: p.tamanho,
+            height: p.tamanho,
+            backgroundColor: p.cor,
+            animation: `confete-cair ${p.duracao}ms ease-in ${p.atraso}ms forwards`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622]">
+      <div className="w-full aspect-[2/3] bg-[#2A2622] animate-pulse" />
+      <div className="p-3 space-y-2">
+        <div className="h-3 bg-[#2A2622] rounded animate-pulse w-4/5" />
+        <div className="h-3 bg-[#2A2622] rounded animate-pulse w-1/3" />
+      </div>
+    </div>
+  );
+}
+
 export default function Filmoteca() {
   const [session, setSession] = useState(null);
   const [carregandoSessao, setCarregandoSessao] = useState(true);
@@ -20,7 +69,10 @@ export default function Filmoteca() {
   const [nota, setNota] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [detalheAberto, setDetalheAberto] = useState(null);
+  const [detalheVisivel, setDetalheVisivel] = useState(false);
+  const [modalVisivel, setModalVisivel] = useState(false);
   const [providersMap, setProvidersMap] = useState({});
+  const [confeteAtivo, setConfeteAtivo] = useState(false);
 
   // observa a sessão de autenticação
   useEffect(() => {
@@ -157,13 +209,40 @@ export default function Filmoteca() {
     setNota("");
   }
 
+  function abrirModalAdicionar() {
+    setModalAberto(true);
+    requestAnimationFrame(() => setModalVisivel(true));
+  }
+
+  function fecharModalAdicionar() {
+    setModalVisivel(false);
+    setTimeout(() => {
+      setModalAberto(false);
+      setSelecionado(null);
+      setBusca("");
+      setResultados([]);
+    }, 250);
+  }
+
+  function abrirDetalhe(filme) {
+    setDetalheAberto(filme);
+    requestAnimationFrame(() => setDetalheVisivel(true));
+  }
+
+  function fecharDetalhe() {
+    setDetalheVisivel(false);
+    setTimeout(() => setDetalheAberto(null), 250);
+  }
+
+  function celebrar() {
+    setConfeteAtivo(true);
+  }
+
   async function confirmarAdicao(status) {
     if (!selecionado || salvando) return;
     const jaExiste = filmes.some((f) => f.id === selecionado.id);
     if (jaExiste) {
-      setModalAberto(false);
-      setSelecionado(null);
-      setBusca("");
+      fecharModalAdicionar();
       return;
     }
     setSalvando(true);
@@ -171,6 +250,7 @@ export default function Filmoteca() {
       `/api/details?id=${selecionado.id}&type=${selecionado.mediaType}`
     );
     const detalhes = await detalhesRes.json();
+    const notaFinal = status === "assistido" && nota ? Number(nota) : null;
     const novoFilme = {
       id: selecionado.id,
       title: selecionado.title,
@@ -179,7 +259,7 @@ export default function Filmoteca() {
       media_type: selecionado.mediaType,
       overview: selecionado.overview || null,
       status,
-      rating: status === "assistido" && nota ? Number(nota) : null,
+      rating: notaFinal,
       user_id: session.user.id,
       genres: detalhes.genres || [],
     };
@@ -195,10 +275,8 @@ export default function Filmoteca() {
       return;
     }
     setFilmes([...filmes, data]);
-    setModalAberto(false);
-    setSelecionado(null);
-    setBusca("");
-    setResultados([]);
+    fecharModalAdicionar();
+    if (notaFinal === 10) celebrar();
   }
 
   async function remover(id) {
@@ -224,6 +302,7 @@ export default function Filmoteca() {
     setFilmes(
       filmes.map((f) => (f.id === id ? { ...f, rating: valor, status: "assistido" } : f))
     );
+    if (valor === 10) celebrar();
   }
 
   if (carregandoSessao) {
@@ -275,143 +354,149 @@ export default function Filmoteca() {
           ))}
         </div>
 
-        {aba === "estatisticas" ? (
-          <div className="space-y-5">
+        <div key={aba} className="animate-[fade-slide-in_0.25s_ease-out]">
+          {carregandoFilmes ? (
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-[#1B1815] rounded-lg border border-[#2A2622] p-4">
-                <p className="text-xs text-[#8A857C]">Total assistidos</p>
-                <p className="text-2xl font-bold mt-1">{assistidos.length}</p>
-              </div>
-              <div className="bg-[#1B1815] rounded-lg border border-[#2A2622] p-4">
-                <p className="text-xs text-[#8A857C]">Nota média</p>
-                <p className="text-2xl font-bold mt-1">{notaMedia ?? "—"}</p>
-              </div>
+              {Array.from({ length: 6 }, (_, i) => (
+                <SkeletonCard key={i} />
+              ))}
             </div>
-
-            {destaque && (
-              <div>
-                <p className="text-xs text-[#8A857C] mb-2">Destaque</p>
-                <div className="flex items-center gap-3 bg-[#1B1815] rounded-lg border border-[#D97757] p-3">
-                  <img
-                    src={destaque.poster}
-                    alt={destaque.title}
-                    className="w-14 h-20 object-cover rounded"
-                  />
-                  <div>
-                    <p className="font-medium text-sm">{destaque.title}</p>
-                    <p className="text-xs text-[#8A857C]">{destaque.year}</p>
-                    <div className="flex items-center gap-1 mt-1 text-[#D97757] font-medium text-sm">
-                      <Star className="w-3.5 h-3.5 fill-[#D97757]" />
-                      {destaque.rating}/10
-                    </div>
-                  </div>
+          ) : aba === "estatisticas" ? (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#1B1815] rounded-lg border border-[#2A2622] p-4">
+                  <p className="text-xs text-[#8A857C]">Total assistidos</p>
+                  <p className="text-2xl font-bold mt-1">{assistidos.length}</p>
+                </div>
+                <div className="bg-[#1B1815] rounded-lg border border-[#2A2622] p-4">
+                  <p className="text-xs text-[#8A857C]">Nota média</p>
+                  <p className="text-2xl font-bold mt-1">{notaMedia ?? "—"}</p>
                 </div>
               </div>
-            )}
 
-            <div>
-              <p className="text-xs text-[#8A857C] mb-2">Distribuição por gênero</p>
-              {generoContagem.length === 0 ? (
-                <p className="text-[#8A857C] text-center py-8 text-sm">
-                  Nenhum filme assistido ainda.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {generoContagem.map(([genero, contagem]) => (
-                    <div key={genero} className="flex items-center gap-2">
-                      <span className="text-xs w-24 shrink-0 truncate">{genero}</span>
-                      <div className="flex-1 bg-[#1B1815] border border-[#2A2622] rounded-full h-3 overflow-hidden">
-                        <div
-                          className="bg-[#D97757] h-full rounded-full"
-                          style={{ width: `${(contagem / maiorContagemGenero) * 100}%` }}
-                        />
+              {destaque && (
+                <div>
+                  <p className="text-xs text-[#8A857C] mb-2">Destaque</p>
+                  <div className="flex items-center gap-3 bg-[#1B1815] rounded-lg border border-[#D97757] p-3">
+                    <img
+                      src={destaque.poster}
+                      alt={destaque.title}
+                      className="w-14 h-20 object-cover rounded"
+                    />
+                    <div>
+                      <p className="font-medium text-sm">{destaque.title}</p>
+                      <p className="text-xs text-[#8A857C]">{destaque.year}</p>
+                      <div className="flex items-center gap-1 mt-1 text-[#D97757] font-medium text-sm">
+                        <Star className="w-3.5 h-3.5 fill-[#D97757]" />
+                        {destaque.rating}/10
                       </div>
-                      <span className="text-xs text-[#8A857C] w-5 text-right">{contagem}</span>
                     </div>
-                  ))}
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
-        ) : carregandoFilmes ? (
-          <p className="text-[#8A857C] text-center py-16 text-sm">Carregando...</p>
-        ) : lista.length === 0 ? (
-          <p className="text-[#8A857C] text-center py-16 text-sm">
-            Nada por aqui ainda. Toque no + para adicionar.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {lista.map((f) => {
-              const providers = providersMap[`${f.id}-${f.media_type}`];
-              const destaqueProvider =
-                providers?.flatrate?.[0] || providers?.rent?.[0] || providers?.buy?.[0];
-              return (
-                <div
-                  key={f.id}
-                  onClick={() => setDetalheAberto(f)}
-                  className="group relative bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] cursor-pointer"
-                >
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      remover(f.id);
-                    }}
-                    className="absolute top-2 right-2 z-10 bg-black/60 rounded-full p-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                  <div className="relative">
-                    <img
-                      src={f.poster}
-                      alt={f.title}
-                      className="w-full aspect-[2/3] object-cover"
-                    />
-                    {destaqueProvider && (
-                      <img
-                        src={destaqueProvider.logo}
-                        alt={destaqueProvider.name}
-                        title={destaqueProvider.name}
-                        className="absolute bottom-2 left-2 w-6 h-6 rounded shadow-md"
-                      />
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="font-medium text-sm leading-tight">{f.title}</p>
-                    <p className="text-xs text-[#8A857C] mt-0.5">{f.year}</p>
-                    {f.overview && (
-                      <p className="text-xs text-[#8A857C] mt-1.5 line-clamp-2">{f.overview}</p>
-                    )}
 
-                    {f.status === "assistido" ? (
-                      <div className="flex items-center gap-1 mt-2 text-[#D97757] font-medium text-sm">
-                        <Star className="w-3.5 h-3.5 fill-[#D97757]" />
-                        {f.rating ?? "—"}/10
+              <div>
+                <p className="text-xs text-[#8A857C] mb-2">Distribuição por gênero</p>
+                {generoContagem.length === 0 ? (
+                  <p className="text-[#8A857C] text-center py-8 text-sm">
+                    Nenhum filme assistido ainda.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {generoContagem.map(([genero, contagem]) => (
+                      <div key={genero} className="flex items-center gap-2">
+                        <span className="text-xs w-24 shrink-0 truncate">{genero}</span>
+                        <div className="flex-1 bg-[#1B1815] border border-[#2A2622] rounded-full h-3 overflow-hidden">
+                          <div
+                            className="bg-[#D97757] h-full rounded-full"
+                            style={{ width: `${(contagem / maiorContagemGenero) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-[#8A857C] w-5 text-right">{contagem}</span>
                       </div>
-                    ) : (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {[6, 7, 8, 9, 10].map((n) => (
-                          <button
-                            key={n}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              avaliar(f.id, n);
-                            }}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition"
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    ))}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                )}
+              </div>
+            </div>
+          ) : lista.length === 0 ? (
+            <p className="text-[#8A857C] text-center py-16 text-sm">
+              Nada por aqui ainda. Toque no + para adicionar.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {lista.map((f) => {
+                const providers = providersMap[`${f.id}-${f.media_type}`];
+                const destaqueProvider =
+                  providers?.flatrate?.[0] || providers?.rent?.[0] || providers?.buy?.[0];
+                return (
+                  <div
+                    key={f.id}
+                    onClick={() => abrirDetalhe(f)}
+                    className="group relative bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10 active:scale-95"
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        remover(f.id);
+                      }}
+                      className="absolute top-2 right-2 z-10 bg-black/60 rounded-full p-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="relative">
+                      <img
+                        src={f.poster}
+                        alt={f.title}
+                        className="w-full aspect-[2/3] object-cover"
+                      />
+                      {destaqueProvider && (
+                        <img
+                          src={destaqueProvider.logo}
+                          alt={destaqueProvider.name}
+                          title={destaqueProvider.name}
+                          className="absolute bottom-2 left-2 w-6 h-6 rounded shadow-md"
+                        />
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <p className="font-medium text-sm leading-tight">{f.title}</p>
+                      <p className="text-xs text-[#8A857C] mt-0.5">{f.year}</p>
+                      {f.overview && (
+                        <p className="text-xs text-[#8A857C] mt-1.5 line-clamp-2">{f.overview}</p>
+                      )}
+
+                      {f.status === "assistido" ? (
+                        <div className="flex items-center gap-1 mt-2 text-[#D97757] font-medium text-sm">
+                          <Star className="w-3.5 h-3.5 fill-[#D97757]" />
+                          {f.rating ?? "—"}/10
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {[6, 7, 8, 9, 10].map((n) => (
+                            <button
+                              key={n}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                avaliar(f.id, n);
+                              }}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition"
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <button
-          onClick={() => setModalAberto(true)}
+          onClick={abrirModalAdicionar}
           className="fixed bottom-6 right-6 bg-[#D97757] text-[#12100E] rounded-full w-14 h-14 flex items-center justify-center shadow-lg active:scale-95 transition"
           aria-label="Adicionar filme"
         >
@@ -420,20 +505,23 @@ export default function Filmoteca() {
       </div>
 
       {modalAberto && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto">
+        <div
+          className={`fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 transition-opacity duration-[250ms] ${
+            modalVisivel ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <div
+            className={`bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
+              modalVisivel
+                ? "translate-y-0 sm:scale-100 opacity-100"
+                : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
+            }`}
+          >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">
                 {selecionado ? "Adicionar" : "Buscar filme ou série"}
               </h2>
-              <button
-                onClick={() => {
-                  setModalAberto(false);
-                  setSelecionado(null);
-                  setBusca("");
-                  setResultados([]);
-                }}
-              >
+              <button onClick={fecharModalAdicionar}>
                 <X className="w-4 h-4 text-[#8A857C]" />
               </button>
             </div>
@@ -452,7 +540,10 @@ export default function Filmoteca() {
                 </div>
 
                 {carregando && (
-                  <p className="text-xs text-[#8A857C] text-center py-4">Buscando...</p>
+                  <div className="flex items-center justify-center gap-2 py-4">
+                    <div className="w-4 h-4 border-2 border-[#2A2622] border-t-[#D97757] rounded-full animate-spin" />
+                    <span className="text-xs text-[#8A857C]">Buscando...</span>
+                  </div>
                 )}
 
                 <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -528,8 +619,10 @@ export default function Filmoteca() {
       )}
 
       {detalheAberto && (
-        <DetailsModal filme={detalheAberto} onClose={() => setDetalheAberto(null)} />
+        <DetailsModal filme={detalheAberto} visivel={detalheVisivel} onClose={fecharDetalhe} />
       )}
+
+      {confeteAtivo && <Confete onFim={() => setConfeteAtivo(false)} />}
     </div>
   );
 }
