@@ -240,25 +240,30 @@ export default function Filmoteca() {
   );
   const carregandoGenero = generoSelecionado !== null && generoSelecionado !== generoCarregado;
 
-  // busca sugestões de um gênero escolhido manualmente; refaz quando o gênero muda
+  // escolhe /api/discover-anime (chip especial) ou /api/discover-genre (demais categorias)
+  function buscarSugestoesPorCategoria(pagina) {
+    const excluirIds = filmes.map((f) => f.id);
+    const url = generoSelecionado === "anime" ? "/api/discover-anime" : "/api/discover-genre";
+    const body =
+      generoSelecionado === "anime"
+        ? { excluirIds, page: pagina }
+        : { genreId: generoSelecionado, excluirIds, page: pagina };
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((res) => res.json());
+  }
+
+  // busca sugestões da categoria escolhida manualmente; refaz quando a categoria muda
   useEffect(() => {
     if (!carregandoGenero) return;
     let ativo = true;
-    fetch("/api/discover-genre", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        genreId: generoSelecionado,
-        excluirIds: filmes.map((f) => f.id),
-        page: 1,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!ativo) return;
-        setSugestoesGenero(data.results || []);
-        setGeneroCarregado(generoSelecionado);
-      });
+    buscarSugestoesPorCategoria(1).then((data) => {
+      if (!ativo) return;
+      setSugestoesGenero(data.results || []);
+      setGeneroCarregado(generoSelecionado);
+    });
     return () => {
       ativo = false;
     };
@@ -281,16 +286,7 @@ export default function Filmoteca() {
     if (carregandoMaisGenero) return;
     setCarregandoMaisGenero(true);
     const proximaPagina = paginaGenero + 1;
-    const res = await fetch("/api/discover-genre", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        genreId: generoSelecionado,
-        excluirIds: filmes.map((f) => f.id),
-        page: proximaPagina,
-      }),
-    });
-    const data = await res.json();
+    const data = await buscarSugestoesPorCategoria(proximaPagina);
     const novos = (data.results || []).filter(
       (r) => !sugestoesGenero.some((s) => s.id === r.id)
     );
@@ -657,6 +653,16 @@ export default function Filmoteca() {
           ) : aba === "descobrir" ? (
             <div>
               <div className="flex gap-1.5 overflow-x-auto pb-2 mb-1">
+                <button
+                  onClick={() => selecionarGenero("anime")}
+                  className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition ${
+                    generoSelecionado === "anime"
+                      ? "bg-[#D97757] text-[#12100E] ring-2 ring-[#D97757]/50 ring-offset-2 ring-offset-[#12100E]"
+                      : "bg-[#D97757]/10 border border-[#D97757]/50 text-[#D97757] hover:bg-[#D97757]/20"
+                  }`}
+                >
+                  🎌 Anime
+                </button>
                 {GENEROS_TMDB.map((g) => (
                   <button
                     key={g.id}
