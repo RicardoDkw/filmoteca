@@ -2,25 +2,26 @@ import { NextResponse } from "next/server";
 import { GENERO_FILME_PARA_SERIE } from "@/lib/genres";
 
 export async function POST(request) {
-  const { genreId, excluirIds } = await request.json();
+  const { genreId, excluirIds, page } = await request.json();
 
   if (!genreId) {
     return NextResponse.json({ results: [] });
   }
 
+  const paginaTmdb = Number(page) > 0 ? Number(page) : 1;
   const excluidos = new Set(excluirIds || []);
   const tvGenreId = GENERO_FILME_PARA_SERIE[genreId];
 
   const fontes = [
     {
       mediaType: "movie",
-      url: `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&region=BR&language=pt-BR&page=1`,
+      url: `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&region=BR&language=pt-BR&page=${paginaTmdb}`,
     },
   ];
   if (tvGenreId) {
     fontes.push({
       mediaType: "tv",
-      url: `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&with_genres=${tvGenreId}&sort_by=popularity.desc&language=pt-BR&page=1`,
+      url: `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&with_genres=${tvGenreId}&sort_by=popularity.desc&language=pt-BR&page=${paginaTmdb}`,
     });
   }
 

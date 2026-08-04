@@ -94,6 +94,9 @@ export default function Filmoteca() {
   const [generoSelecionado, setGeneroSelecionado] = useState(null);
   const [sugestoesGenero, setSugestoesGenero] = useState([]);
   const [generoCarregado, setGeneroCarregado] = useState(null);
+  const [paginaGenero, setPaginaGenero] = useState(1);
+  const [carregandoMaisGenero, setCarregandoMaisGenero] = useState(false);
+  const [semMaisGenero, setSemMaisGenero] = useState(false);
 
   // observa a sessão de autenticação
   useEffect(() => {
@@ -244,7 +247,11 @@ export default function Filmoteca() {
     fetch("/api/discover-genre", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ genreId: generoSelecionado, excluirIds: filmes.map((f) => f.id) }),
+      body: JSON.stringify({
+        genreId: generoSelecionado,
+        excluirIds: filmes.map((f) => f.id),
+        page: 1,
+      }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -257,6 +264,44 @@ export default function Filmoteca() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carregandoGenero]);
+
+  function selecionarGenero(id) {
+    setGeneroSelecionado(generoSelecionado === id ? null : id);
+    setPaginaGenero(1);
+    setSemMaisGenero(false);
+  }
+
+  function limparFiltroGenero() {
+    setGeneroSelecionado(null);
+    setPaginaGenero(1);
+    setSemMaisGenero(false);
+  }
+
+  async function carregarMaisGenero() {
+    if (carregandoMaisGenero) return;
+    setCarregandoMaisGenero(true);
+    const proximaPagina = paginaGenero + 1;
+    const res = await fetch("/api/discover-genre", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        genreId: generoSelecionado,
+        excluirIds: filmes.map((f) => f.id),
+        page: proximaPagina,
+      }),
+    });
+    const data = await res.json();
+    const novos = (data.results || []).filter(
+      (r) => !sugestoesGenero.some((s) => s.id === r.id)
+    );
+    setCarregandoMaisGenero(false);
+    if (novos.length === 0) {
+      setSemMaisGenero(true);
+      return;
+    }
+    setSugestoesGenero((atual) => [...atual, ...novos]);
+    setPaginaGenero(proximaPagina);
+  }
 
   const carregandoDescobrir = generoSelecionado !== null ? carregandoGenero : carregandoRecomendacoes;
   const itensDescobrir = generoSelecionado !== null ? sugestoesGeneroFiltradas : recomendacoesFiltradas;
@@ -615,9 +660,7 @@ export default function Filmoteca() {
                 {GENEROS_TMDB.map((g) => (
                   <button
                     key={g.id}
-                    onClick={() =>
-                      setGeneroSelecionado(generoSelecionado === g.id ? null : g.id)
-                    }
+                    onClick={() => selecionarGenero(g.id)}
                     className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition ${
                       generoSelecionado === g.id
                         ? "bg-[#D97757] text-[#12100E]"
@@ -631,7 +674,7 @@ export default function Filmoteca() {
 
               {generoSelecionado !== null && (
                 <button
-                  onClick={() => setGeneroSelecionado(null)}
+                  onClick={limparFiltroGenero}
                   className="text-xs text-[#8A857C] hover:text-[#F1EEE6] transition mb-3"
                 >
                   Limpar filtro
@@ -689,6 +732,22 @@ export default function Filmoteca() {
                     </div>
                   ))}
                 </div>
+              )}
+
+              {generoSelecionado !== null && itensDescobrir.length > 0 && !carregandoDescobrir && (
+                semMaisGenero ? (
+                  <p className="text-xs text-[#8A857C] text-center mt-3">
+                    Não há mais sugestões para esse gênero no momento.
+                  </p>
+                ) : (
+                  <button
+                    onClick={carregarMaisGenero}
+                    disabled={carregandoMaisGenero}
+                    className="w-full mt-3 text-sm font-medium py-2 rounded-md bg-[#1B1815] border border-[#2A2622] hover:border-[#D97757] transition disabled:opacity-60"
+                  >
+                    {carregandoMaisGenero ? "Carregando..." : "Carregar mais"}
+                  </button>
+                )
               )}
             </div>
           ) : lista.length === 0 ? (
