@@ -5,6 +5,7 @@ import { Search, Star, Plus, X, Film, LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
+import Onboarding from "@/components/Onboarding";
 
 const CORES_CONFETE = ["#D97757", "#E5896D", "#F1EEE6"];
 
@@ -82,6 +83,7 @@ export default function Filmoteca() {
   const [modalVisivel, setModalVisivel] = useState(false);
   const [providersMap, setProvidersMap] = useState({});
   const [confeteAtivo, setConfeteAtivo] = useState(false);
+  const [onboardingFechado, setOnboardingFechado] = useState(false);
   const [recomendacoes, setRecomendacoes] = useState([]);
   const [assinaturaRecomendacoes, setAssinaturaRecomendacoes] = useState(null);
   const [salvandoRecomendacao, setSalvandoRecomendacao] = useState(null);
@@ -125,6 +127,20 @@ export default function Filmoteca() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+  }
+
+  // primeiro acesso: sem filmes salvos e onboarding nunca visto
+  const mostrarOnboarding =
+    !!session &&
+    !carregandoFilmes &&
+    !onboardingFechado &&
+    filmes.length === 0 &&
+    !session.user.user_metadata?.onboarding_visto;
+
+  async function finalizarOnboarding() {
+    setOnboardingFechado(true);
+    const { error } = await supabase.auth.updateUser({ data: { onboarding_visto: true } });
+    if (error) console.error("Erro ao salvar onboarding:", error);
   }
 
   // busca na API do TMDb enquanto o usuário digita
@@ -799,6 +815,8 @@ export default function Filmoteca() {
       )}
 
       {confeteAtivo && <Confete onFim={() => setConfeteAtivo(false)} />}
+
+      {mostrarOnboarding && <Onboarding onFinalizar={finalizarOnboarding} />}
     </div>
   );
 }
