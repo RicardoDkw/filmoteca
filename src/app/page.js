@@ -363,12 +363,33 @@ export default function Filmoteca() {
     if (error) {
       console.error("Erro ao avaliar filme:", error);
       alert("Não foi possível salvar a nota. Tente novamente.");
-      return;
+      return false;
     }
     setFilmes(
       filmes.map((f) => (f.id === id ? { ...f, rating: valor, status: "assistido" } : f))
     );
+    setDetalheAberto((atual) =>
+      atual && atual.id === id ? { ...atual, rating: valor, status: "assistido" } : atual
+    );
     if (valor === 10) celebrar();
+    return true;
+  }
+
+  async function moverParaQuero(id) {
+    const { error } = await supabase
+      .from("filmes")
+      .update({ status: "quero", rating: null })
+      .eq("id", id);
+    if (error) {
+      console.error("Erro ao mover filme:", error);
+      alert("Não foi possível mover o filme. Tente novamente.");
+      return false;
+    }
+    setFilmes(filmes.map((f) => (f.id === id ? { ...f, status: "quero", rating: null } : f)));
+    setDetalheAberto((atual) =>
+      atual && atual.id === id ? { ...atual, status: "quero", rating: null } : atual
+    );
+    return true;
   }
 
   async function adicionarRecomendacao(item) {
@@ -768,7 +789,13 @@ export default function Filmoteca() {
       )}
 
       {detalheAberto && (
-        <DetailsModal filme={detalheAberto} visivel={detalheVisivel} onClose={fecharDetalhe} />
+        <DetailsModal
+          filme={detalheAberto}
+          visivel={detalheVisivel}
+          onClose={fecharDetalhe}
+          onAvaliar={avaliar}
+          onMoverParaQuero={moverParaQuero}
+        />
       )}
 
       {confeteAtivo && <Confete onFim={() => setConfeteAtivo(false)} />}

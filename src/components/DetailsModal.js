@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Star, X } from "lucide-react";
+import { Check, Star, X } from "lucide-react";
 
 function GrupoProviders({ titulo, lista }) {
   if (!lista || lista.length === 0) return null;
@@ -24,9 +24,34 @@ function GrupoProviders({ titulo, lista }) {
   );
 }
 
-export default function DetailsModal({ filme, visivel, onClose }) {
+export default function DetailsModal({ filme, visivel, onClose, onAvaliar, onMoverParaQuero }) {
   const [providers, setProviders] = useState(null);
+  const [salvandoNota, setSalvandoNota] = useState(null);
+  const [notaSalva, setNotaSalva] = useState(false);
+  const [movendo, setMovendo] = useState(false);
   const carregando = providers === null;
+
+  async function handleAvaliar(n) {
+    if (salvandoNota !== null || n === filme.rating) return;
+    setSalvandoNota(n);
+    const ok = await onAvaliar(filme.id, n);
+    setSalvandoNota(null);
+    if (ok) {
+      setNotaSalva(true);
+      setTimeout(() => setNotaSalva(false), 1000);
+    }
+  }
+
+  async function handleMoverParaQuero() {
+    if (movendo) return;
+    setMovendo(true);
+    const ok = await onMoverParaQuero(filme.id);
+    if (ok) {
+      onClose();
+      return;
+    }
+    setMovendo(false);
+  }
 
   useEffect(() => {
     let ativo = true;
@@ -100,6 +125,36 @@ export default function DetailsModal({ filme, visivel, onClose }) {
           </div>
         )}
 
+        {filme.status === "assistido" && (
+          <div className="border-t border-[#2A2622] pt-3 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium">Sua nota</p>
+              {notaSalva && (
+                <span className="flex items-center gap-1 text-xs text-green-400">
+                  <Check className="w-3.5 h-3.5" />
+                  Salvo
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => handleAvaliar(n)}
+                  disabled={salvandoNota !== null}
+                  className={`text-xs w-7 h-7 rounded transition disabled:opacity-60 ${
+                    filme.rating === n
+                      ? "bg-[#D97757] text-[#12100E] font-medium"
+                      : "bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E]"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="border-t border-[#2A2622] pt-3">
           <p className="text-sm font-medium mb-2">Onde assistir</p>
           {carregando ? (
@@ -117,6 +172,16 @@ export default function DetailsModal({ filme, visivel, onClose }) {
             </>
           )}
         </div>
+
+        {filme.status === "assistido" && (
+          <button
+            onClick={handleMoverParaQuero}
+            disabled={movendo}
+            className="w-full text-xs text-[#8A857C] hover:text-[#F1EEE6] py-2 mt-3 transition disabled:opacity-60"
+          >
+            {movendo ? "Movendo..." : "Mover para Quero ver"}
+          </button>
+        )}
       </div>
     </div>
   );
