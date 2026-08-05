@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Star, Plus, X, Film, LogOut, Lock, Users, ArrowLeft } from "lucide-react";
+import { Search, Star, Plus, X, Film, LogOut, Lock, Users, ArrowLeft, User } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
 import ToastConquistas from "@/components/ToastConquistas";
+import EscolherNick from "@/components/EscolherNick";
+import PerfilModal from "@/components/PerfilModal";
 import { GENEROS_TMDB } from "@/lib/genres";
 import { BADGES, calcularDesbloqueadas } from "@/lib/badges";
 
@@ -101,15 +103,19 @@ export default function Filmoteca() {
   const [paginaGenero, setPaginaGenero] = useState(1);
   const [carregandoMaisGenero, setCarregandoMaisGenero] = useState(false);
   const [semMaisGenero, setSemMaisGenero] = useState(false);
-  const [buscaEmailAmigo, setBuscaEmailAmigo] = useState("");
+  const [buscaNickAmigo, setBuscaNickAmigo] = useState("");
   const [buscandoAmigo, setBuscandoAmigo] = useState(false);
   const [erroBuscaAmigo, setErroBuscaAmigo] = useState("");
   const [seguindo, setSeguindo] = useState([]);
-  const [perfisSeguindo, setPerfisSeguindo] = useState({});
   const [amigoSelecionado, setAmigoSelecionado] = useState(null);
   const [assistidosDoAmigo, setAssistidosDoAmigo] = useState({});
   const [carregandoAssistidosAmigo, setCarregandoAssistidosAmigo] = useState(false);
   const [deixandoDeSeguir, setDeixandoDeSeguir] = useState(null);
+  const [perfilProprio, setPerfilProprio] = useState(null);
+  const [perfilCarregadoPara, setPerfilCarregadoPara] = useState(null);
+  const [perfisPorId, setPerfisPorId] = useState({});
+  const [perfilModalAberto, setPerfilModalAberto] = useState(false);
+  const [perfilModalVisivel, setPerfilModalVisivel] = useState(false);
 
   // observa a sessão de autenticação
   useEffect(() => {
@@ -152,12 +158,54 @@ export default function Filmoteca() {
     await supabase.auth.signOut();
   }
 
-  // carrega quem o usuário segue e resolve os e-mails pra exibição
+  // carrega o perfil do próprio usuário (nick obrigatório antes de usar o app)
+  useEffect(() => {
+    if (session) return;
+    const limpar = setTimeout(() => {
+      setPerfilProprio(null);
+      setPerfilCarregadoPara(null);
+    }, 0);
+    return () => clearTimeout(limpar);
+  }, [session]);
+
+  const carregandoPerfil = !!session && perfilCarregadoPara !== session.user.id;
+
+  useEffect(() => {
+    if (!carregandoPerfil) return;
+    let ativo = true;
+    supabase
+      .from("perfis")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!ativo) return;
+        if (error) console.error("Erro ao carregar perfil:", error);
+        setPerfilProprio(data || null);
+        setPerfilCarregadoPara(session.user.id);
+      });
+    return () => {
+      ativo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregandoPerfil]);
+
+  function abrirPerfilModal() {
+    setPerfilModalAberto(true);
+    requestAnimationFrame(() => setPerfilModalVisivel(true));
+  }
+
+  function fecharPerfilModal() {
+    setPerfilModalVisivel(false);
+    setTimeout(() => setPerfilModalAberto(false), 250);
+  }
+
+  // carrega quem o usuário segue e resolve nick/nome/avatar pra exibição
   useEffect(() => {
     if (!session) {
       const limpar = setTimeout(() => {
         setSeguindo([]);
-        setPerfisSeguindo({});
+        setPerfisPorId({});
       }, 0);
       return () => clearTimeout(limpar);
     }
@@ -175,19 +223,18 @@ export default function Filmoteca() {
       setSeguindo(data || []);
       const ids = (data || []).map((s) => s.seguido_id);
       if (ids.length === 0) return;
-      const res = await fetch("/api/perfis-usuarios", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ userIds: ids }),
-      });
-      const perfisData = await res.json();
+      const { data: perfisData, error: erroPerfis } = await supabase
+        .from("perfis")
+        .select("user_id, nick, nome, avatar_url")
+        .in("user_id", ids);
+      if (erroPerfis) {
+        console.error("Erro ao carregar perfis de seguidos:", erroPerfis);
+        return;
+      }
       if (!ativo) return;
       const mapa = {};
-      for (const u of perfisData.usuarios || []) mapa[u.id] = u.email;
-      setPerfisSeguindo(mapa);
+      for (const p of perfisData || []) mapa[p.user_id] = p;
+      setPerfisPorId(mapa);
     })();
     return () => {
       ativo = false;
@@ -196,20 +243,20 @@ export default function Filmoteca() {
 
   async function seguirUsuario() {
     if (buscandoAmigo) return;
-    const email = buscaEmailAmigo.trim();
-    if (!email) {
-      setErroBuscaAmigo("Informe um e-mail.");
+    const nick = buscaNickAmigo.trim();
+    if (!nick) {
+      setErroBuscaAmigo("Informe um nick.");
       return;
     }
     setErroBuscaAmigo("");
     setBuscandoAmigo(true);
-    const res = await fetch("/api/buscar-usuario", {
+    const res = await fetch("/api/buscar-por-nick", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ nick }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -219,19 +266,20 @@ export default function Filmoteca() {
       } else if (res.status === 401) {
         setErroBuscaAmigo("Sua sessão expirou. Atualize a página e faça login novamente.");
       } else {
-        console.error("Erro ao buscar usuário:", res.status, data);
+        console.error("Erro ao buscar por nick:", res.status, data);
         setErroBuscaAmigo("Não foi possível buscar o usuário. Tente novamente.");
       }
       return;
     }
-    if (data.userId === session.user.id) {
+    const perfilEncontrado = data.perfil;
+    if (perfilEncontrado.user_id === session.user.id) {
       setBuscandoAmigo(false);
       setErroBuscaAmigo("Você não pode seguir a si mesmo.");
       return;
     }
     const { data: novo, error } = await supabase
       .from("seguidores")
-      .insert({ seguidor_id: session.user.id, seguido_id: data.userId })
+      .insert({ seguidor_id: session.user.id, seguido_id: perfilEncontrado.user_id })
       .select()
       .single();
     setBuscandoAmigo(false);
@@ -245,8 +293,8 @@ export default function Filmoteca() {
       return;
     }
     setSeguindo((atual) => [...atual, novo]);
-    setPerfisSeguindo((atual) => ({ ...atual, [data.userId]: email }));
-    setBuscaEmailAmigo("");
+    setPerfisPorId((atual) => ({ ...atual, [perfilEncontrado.user_id]: perfilEncontrado }));
+    setBuscaNickAmigo("");
   }
 
   async function deixarDeSeguir(id) {
@@ -730,6 +778,23 @@ export default function Filmoteca() {
     return <AuthScreen />;
   }
 
+  if (carregandoPerfil) {
+    return (
+      <div className="min-h-screen bg-[#12100E] text-[#F1EEE6] flex items-center justify-center">
+        <p className="text-[#8A857C] text-sm">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!perfilProprio) {
+    return (
+      <EscolherNick
+        session={session}
+        onCriado={(perfil) => setPerfilProprio(perfil)}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#12100E] text-[#F1EEE6] p-6">
       <div className="max-w-md mx-auto pb-20">
@@ -738,13 +803,30 @@ export default function Filmoteca() {
             <Film className="w-5 h-5 text-[#D97757]" />
             <h1 className="text-2xl font-bold tracking-wide">MINHA FILMOTECA</h1>
           </div>
-          <button
-            onClick={handleLogout}
-            aria-label="Sair"
-            className="text-[#8A857C] hover:text-[#F1EEE6] transition p-1"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={abrirPerfilModal}
+              aria-label="Meu perfil"
+              className="w-7 h-7 rounded-full overflow-hidden bg-[#1B1815] border border-[#2A2622] flex items-center justify-center shrink-0"
+            >
+              {perfilProprio?.avatar_url ? (
+                <img
+                  src={perfilProprio.avatar_url}
+                  alt="Meu avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-3.5 h-3.5 text-[#8A857C]" />
+              )}
+            </button>
+            <button
+              onClick={handleLogout}
+              aria-label="Sair"
+              className="text-[#8A857C] hover:text-[#F1EEE6] transition p-1"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </header>
 
         <div className="flex gap-1 mb-5 bg-[#1B1815] rounded-lg p-1 border border-[#2A2622]">
@@ -977,7 +1059,10 @@ export default function Filmoteca() {
                   Voltar
                 </button>
                 <p className="text-sm font-medium mb-3 truncate">
-                  Assistidos de {perfisSeguindo[amigoSelecionado] || "..."}
+                  Assistidos de{" "}
+                  {perfisPorId[amigoSelecionado]?.nome ||
+                    perfisPorId[amigoSelecionado]?.nick ||
+                    "..."}
                 </p>
                 {carregandoAssistidosAmigo ? (
                   <div className="grid grid-cols-2 gap-3">
@@ -1018,13 +1103,13 @@ export default function Filmoteca() {
               <div>
                 <div className="flex gap-2 mb-2">
                   <input
-                    type="email"
-                    value={buscaEmailAmigo}
-                    onChange={(e) => setBuscaEmailAmigo(e.target.value)}
+                    type="text"
+                    value={buscaNickAmigo}
+                    onChange={(e) => setBuscaNickAmigo(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") seguirUsuario();
                     }}
-                    placeholder="E-mail do seu amigo"
+                    placeholder="Nick do seu amigo"
                     className="flex-1 bg-[#1B1815] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
                   />
                   <button
@@ -1047,16 +1132,31 @@ export default function Filmoteca() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {seguindo.map((s) => (
+                    {seguindo.map((s) => {
+                      const perfil = perfisPorId[s.seguido_id];
+                      return (
                       <div
                         key={s.seguido_id}
                         className="flex items-center justify-between bg-[#1B1815] border border-[#2A2622] rounded-md p-3"
                       >
                         <button
                           onClick={() => abrirAmigo(s.seguido_id)}
-                          className="text-sm text-left flex-1 hover:text-[#D97757] transition truncate"
+                          className="flex items-center gap-2 text-sm text-left flex-1 hover:text-[#D97757] transition truncate min-w-0"
                         >
-                          {perfisSeguindo[s.seguido_id] || "Carregando..."}
+                          <span className="w-7 h-7 rounded-full overflow-hidden bg-[#12100E] border border-[#2A2622] flex items-center justify-center shrink-0">
+                            {perfil?.avatar_url ? (
+                              <img
+                                src={perfil.avatar_url}
+                                alt={perfil.nick}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <User className="w-3.5 h-3.5 text-[#8A857C]" />
+                            )}
+                          </span>
+                          <span className="truncate">
+                            {perfil ? perfil.nome || perfil.nick : "Carregando..."}
+                          </span>
                         </button>
                         <button
                           onClick={() => deixarDeSeguir(s.seguido_id)}
@@ -1066,7 +1166,8 @@ export default function Filmoteca() {
                           {deixandoDeSeguir === s.seguido_id ? "Removendo..." : "Deixar de seguir"}
                         </button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1310,6 +1411,15 @@ export default function Filmoteca() {
         <ToastConquistas
           badges={toastConquistas}
           onFechar={() => setToastConquistas(null)}
+        />
+      )}
+
+      {perfilModalAberto && (
+        <PerfilModal
+          perfil={perfilProprio}
+          visivel={perfilModalVisivel}
+          onClose={fecharPerfilModal}
+          onSalvar={(novoPerfil) => setPerfilProprio(novoPerfil)}
         />
       )}
     </div>
