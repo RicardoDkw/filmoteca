@@ -25,6 +25,7 @@ import DetailsModal from "@/components/DetailsModal";
 import RatingInput, { notaEhValida } from "@/components/RatingInput";
 import ComentariosFilmeModal from "@/components/ComentariosFilmeModal";
 import NotificacoesModal from "@/components/NotificacoesModal";
+import AvaliarModal from "@/components/AvaliarModal";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
 import ToastConquistas from "@/components/ToastConquistas";
@@ -155,6 +156,8 @@ export default function Filmoteca() {
   const [perfilModalVisivel, setPerfilModalVisivel] = useState(false);
   const [comentarioFilmeAberto, setComentarioFilmeAberto] = useState(null);
   const [comentarioFilmeVisivel, setComentarioFilmeVisivel] = useState(false);
+  const [avaliarModalAberto, setAvaliarModalAberto] = useState(null);
+  const [avaliarModalVisivel, setAvaliarModalVisivel] = useState(false);
   const [notificacaoModalAberto, setNotificacaoModalAberto] = useState(false);
   const [notificacaoModalVisivel, setNotificacaoModalVisivel] = useState(false);
   const [contagemNaoLidas, setContagemNaoLidas] = useState(0);
@@ -747,6 +750,16 @@ export default function Filmoteca() {
   function fecharComentariosFilme() {
     setComentarioFilmeVisivel(false);
     setTimeout(() => setComentarioFilmeAberto(null), 250);
+  }
+
+  function abrirAvaliarModal(filme) {
+    setAvaliarModalAberto(filme);
+    requestAnimationFrame(() => setAvaliarModalVisivel(true));
+  }
+
+  function fecharAvaliarModal() {
+    setAvaliarModalVisivel(false);
+    setTimeout(() => setAvaliarModalAberto(null), 250);
   }
 
   function handleVerComentariosProprio(filme) {
@@ -1444,20 +1457,15 @@ export default function Filmoteca() {
                             {f.rating ?? "—"}/10
                           </div>
                         ) : (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                              <button
-                                key={n}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  avaliar(f.id, n);
-                                }}
-                                className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition"
-                              >
-                                {n}
-                              </button>
-                            ))}
-                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              abrirAvaliarModal(f);
+                            }}
+                            className="mt-2 w-full text-xs font-medium py-1.5 rounded-lg bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition"
+                          >
+                            Já assisti
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1623,6 +1631,15 @@ export default function Filmoteca() {
           sessionUserId={session.user.id}
           perfilProprio={perfilProprio}
           perfisConhecidos={perfisPorId}
+        />
+      )}
+
+      {avaliarModalAberto && (
+        <AvaliarModal
+          filme={avaliarModalAberto}
+          visivel={avaliarModalVisivel}
+          onClose={fecharAvaliarModal}
+          onAvaliar={avaliar}
         />
       )}
 
