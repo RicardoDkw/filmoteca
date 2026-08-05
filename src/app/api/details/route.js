@@ -6,7 +6,7 @@ export async function GET(request) {
   const type = searchParams.get("type");
 
   if (!id || (type !== "movie" && type !== "tv")) {
-    return NextResponse.json({ genres: [] });
+    return NextResponse.json({ genres: [], voteAverage: null });
   }
 
   const url = `https://api.themoviedb.org/3/${type}/${id}?api_key=${process.env.TMDB_API_KEY}&language=pt-BR`;
@@ -14,12 +14,13 @@ export async function GET(request) {
   const response = await fetch(url);
 
   if (!response.ok) {
-    return NextResponse.json({ genres: [] }, { status: 500 });
+    return NextResponse.json({ genres: [], voteAverage: null }, { status: 500 });
   }
 
   const data = await response.json();
 
   const genres = (data.genres || []).map((g) => g.name);
+  const voteAverage = typeof data.vote_average === "number" ? data.vote_average : null;
 
-  return NextResponse.json({ genres });
+  return NextResponse.json({ genres, voteAverage });
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Star, X } from "lucide-react";
+import { Check, Globe, Star, X } from "lucide-react";
+import RatingInput, { notaEhValida } from "@/components/RatingInput";
 
 function GrupoProviders({ titulo, lista }) {
   if (!lista || lista.length === 0) return null;
@@ -29,10 +30,13 @@ export default function DetailsModal({ filme, visivel, onClose, onAvaliar, onMov
   const [salvandoNota, setSalvandoNota] = useState(null);
   const [notaSalva, setNotaSalva] = useState(false);
   const [movendo, setMovendo] = useState(false);
+  const [notaInput, setNotaInput] = useState(filme.rating != null ? String(filme.rating) : "");
   const carregando = providers === null;
 
-  async function handleAvaliar(n) {
-    if (salvandoNota !== null || n === filme.rating) return;
+  async function handleAvaliar() {
+    if (!notaEhValida(notaInput) || salvandoNota !== null) return;
+    const n = Number(notaInput);
+    if (n === filme.rating) return;
     setSalvandoNota(n);
     const ok = await onAvaliar(filme.id, n);
     setSalvandoNota(null);
@@ -100,12 +104,20 @@ export default function DetailsModal({ filme, visivel, onClose, onAvaliar, onMov
           <div>
             <p className="font-medium">{filme.title}</p>
             <p className="text-xs text-[#8A857C]">{filme.year}</p>
-            {filme.status === "assistido" && (
-              <div className="flex items-center gap-1 mt-1 text-[#D97757] font-medium text-sm">
-                <Star className="w-3.5 h-3.5 fill-[#D97757]" />
-                {filme.rating ?? "—"}/10
-              </div>
-            )}
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              {filme.status === "assistido" && (
+                <div className="flex items-center gap-1 text-[#D97757] font-medium text-sm">
+                  <Star className="w-3.5 h-3.5 fill-[#D97757]" />
+                  {filme.rating ?? "—"}/10
+                </div>
+              )}
+              {filme.vote_average != null && (
+                <div className="flex items-center gap-1 text-[#8A857C] text-sm">
+                  <Globe className="w-3.5 h-3.5" />
+                  {filme.vote_average.toFixed(1)}
+                </div>
+              )}
+            </div>
             {filme.overview && (
               <p className="text-xs text-[#8A857C] mt-1.5 line-clamp-4">{filme.overview}</p>
             )}
@@ -128,7 +140,15 @@ export default function DetailsModal({ filme, visivel, onClose, onAvaliar, onMov
         {filme.status === "assistido" && (
           <div className="border-t border-[#2A2622] pt-3 mb-3">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium">Sua nota</p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm font-medium">Sua nota</p>
+                {filme.vote_average != null && (
+                  <span className="flex items-center gap-1 text-xs text-[#8A857C]">
+                    <Globe className="w-3 h-3" />
+                    Nota TMDb: {filme.vote_average.toFixed(1)}
+                  </span>
+                )}
+              </div>
               {notaSalva && (
                 <span className="flex items-center gap-1 text-xs text-green-400">
                   <Check className="w-3.5 h-3.5" />
@@ -136,22 +156,18 @@ export default function DetailsModal({ filme, visivel, onClose, onAvaliar, onMov
                 </span>
               )}
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => handleAvaliar(n)}
-                  disabled={salvandoNota !== null}
-                  className={`text-xs w-7 h-7 rounded transition disabled:opacity-60 ${
-                    filme.rating === n
-                      ? "bg-[#D97757] text-[#12100E] font-medium"
-                      : "bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E]"
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
+            <RatingInput value={notaInput} onChange={setNotaInput} disabled={salvandoNota !== null} />
+            <button
+              onClick={handleAvaliar}
+              disabled={
+                salvandoNota !== null ||
+                !notaEhValida(notaInput) ||
+                Number(notaInput) === filme.rating
+              }
+              className="w-full mt-2 bg-[#D97757] text-[#12100E] font-medium py-1.5 rounded-md text-sm hover:bg-[#e5896d] transition disabled:opacity-60"
+            >
+              {salvandoNota !== null ? "Salvando..." : "Salvar nota"}
+            </button>
           </div>
         )}
 

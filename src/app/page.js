@@ -16,10 +16,12 @@ import {
   Bookmark,
   Compass,
   BarChart,
+  Globe,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
+import RatingInput, { notaEhValida } from "@/components/RatingInput";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
 import ToastConquistas from "@/components/ToastConquistas";
@@ -604,6 +606,28 @@ export default function Filmoteca() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lista]);
 
+  // busca a nota da comunidade (TMDb) para itens visíveis que ainda não têm
+  useEffect(() => {
+    const faltando = lista.filter((f) => f.vote_average == null);
+    if (faltando.length === 0) return;
+    let ativo = true;
+    (async () => {
+      for (const f of faltando) {
+        const res = await fetch(`/api/details?id=${f.id}&type=${f.media_type}`);
+        const data = await res.json();
+        if (!ativo) return;
+        if (typeof data.voteAverage !== "number") continue;
+        await supabase.from("filmes").update({ vote_average: data.voteAverage }).eq("id", f.id);
+        setFilmes((atual) =>
+          atual.map((m) => (m.id === f.id ? { ...m, vote_average: data.voteAverage } : m))
+        );
+      }
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [lista]);
+
   function abrirParaAdicionar(filme) {
     setSelecionado(filme);
     setNota("");
@@ -656,6 +680,10 @@ export default function Filmoteca() {
 
   async function confirmarAdicao(status) {
     if (!selecionado || salvando) return;
+    if (status === "assistido" && nota && !notaEhValida(nota)) {
+      alert("A nota deve ser um número inteiro entre 1 e 10.");
+      return;
+    }
     const jaExiste = filmes.some((f) => f.id === selecionado.id);
     if (jaExiste) {
       fecharModalAdicionar();
@@ -678,6 +706,7 @@ export default function Filmoteca() {
       rating: notaFinal,
       user_id: session.user.id,
       genres: detalhes.genres || [],
+      vote_average: typeof detalhes.voteAverage === "number" ? detalhes.voteAverage : null,
     };
     const { data, error } = await supabase
       .from("filmes")
@@ -721,6 +750,7 @@ export default function Filmoteca() {
   }
 
   async function avaliar(id, valor) {
+    if (!Number.isInteger(valor) || valor < 1 || valor > 10) return false;
     const { error } = await supabase
       .from("filmes")
       .update({ rating: valor, status: "assistido" })
@@ -775,6 +805,7 @@ export default function Filmoteca() {
       rating: null,
       user_id: session.user.id,
       genres: detalhes.genres || [],
+      vote_average: typeof detalhes.voteAverage === "number" ? detalhes.voteAverage : null,
     };
     const { data, error } = await supabase
       .from("filmes")
@@ -1235,6 +1266,12 @@ export default function Filmoteca() {
                           alt={f.title}
                           className="w-full aspect-[2/3] object-cover"
                         />
+                        {f.vote_average != null && (
+                          <div className="absolute top-1 left-1 flex items-center gap-0.5 bg-black/60 text-[10px] text-[#F1EEE6] px-1.5 py-0.5 rounded-full">
+                            <Globe className="w-2.5 h-2.5" />
+                            {f.vote_average.toFixed(1)}
+                          </div>
+                        )}
                         {destaqueProvider && (
                           <img
                             src={destaqueProvider.logo}
@@ -1258,7 +1295,7 @@ export default function Filmoteca() {
                           </div>
                         ) : (
                           <div className="mt-2 flex flex-wrap gap-1">
-                            {[6, 7, 8, 9, 10].map((n) => (
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                               <button
                                 key={n}
                                 onClick={(e) => {
@@ -1388,18 +1425,12 @@ export default function Filmoteca() {
                   </div>
                 </div>
 
-                <label className="text-xs text-[#8A857C]">
+                <label className="text-xs text-[#8A857C] mb-1 block">
                   Já assistiu? Dê uma nota (opcional)
                 </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={nota}
-                  onChange={(e) => setNota(e.target.value)}
-                  placeholder="Nota de 1 a 10"
-                  className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 mt-1 mb-4 text-sm focus:outline-none focus:border-[#D97757]"
-                />
+                <div className="mb-4">
+                  <RatingInput value={nota} onChange={setNota} disabled={salvando} />
+                </div>
 
                 <div className="flex gap-2">
                   <button
@@ -1411,7 +1442,7 @@ export default function Filmoteca() {
                   </button>
                   <button
                     onClick={() => confirmarAdicao("assistido")}
-                    disabled={salvando}
+                    disabled={salvando || (nota !== "" && !notaEhValida(nota))}
                     className="flex-1 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition disabled:opacity-60"
                   >
                     {salvando ? "Salvando..." : "Já assisti"}
