@@ -20,6 +20,7 @@ import {
   Bell,
   Camera,
   Trash2,
+  Heart,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
@@ -168,6 +169,17 @@ export default function Filmoteca() {
   const [postarModalAberto, setPostarModalAberto] = useState(false);
   const [postarModalVisivel, setPostarModalVisivel] = useState(false);
   const [apagandoPost, setApagandoPost] = useState(null);
+  const [curtidasPorPost, setCurtidasPorPost] = useState({});
+  const [curtidoPorMim, setCurtidoPorMim] = useState({});
+  const [curtindoPost, setCurtindoPost] = useState(null);
+  const [comentariosContagemPorPost, setComentariosContagemPorPost] = useState({});
+  const [postComentariosAberto, setPostComentariosAberto] = useState(null);
+  const [comentariosPorPost, setComentariosPorPost] = useState({});
+  const [carregandoComentariosPost, setCarregandoComentariosPost] = useState(null);
+  const [perfisAutoresComentariosPost, setPerfisAutoresComentariosPost] = useState({});
+  const [novoComentarioPost, setNovoComentarioPost] = useState("");
+  const [enviandoComentarioPost, setEnviandoComentarioPost] = useState(false);
+  const [apagandoComentarioPost, setApagandoComentarioPost] = useState(null);
   const [notificacaoModalAberto, setNotificacaoModalAberto] = useState(false);
   const [notificacaoModalVisivel, setNotificacaoModalVisivel] = useState(false);
   const [contagemNaoLidas, setContagemNaoLidas] = useState(0);
@@ -354,7 +366,8 @@ export default function Filmoteca() {
     };
   }, [session]);
 
-  // carrega o feed (próprios posts + de quem segue) ao abrir a aba
+  // carrega o feed (próprios posts + de quem segue) ao abrir a aba, junto com
+  // curtidas e contagem de comentários de todos os posts visíveis em lote (não por post)
   useEffect(() => {
     async function carregarPosts() {
       if (aba !== "feed" || !session) return;
@@ -365,12 +378,47 @@ export default function Filmoteca() {
         .select("*")
         .in("autor_id", ids)
         .order("created_at", { ascending: false });
-      setCarregandoPosts(false);
       if (error) {
+        setCarregandoPosts(false);
         console.error("Erro ao carregar posts:", error);
         return;
       }
-      setPosts(data || []);
+      const lista = data || [];
+      setPosts(lista);
+      const postIds = lista.map((p) => p.id);
+      if (postIds.length === 0) {
+        setCarregandoPosts(false);
+        setCurtidasPorPost({});
+        setCurtidoPorMim({});
+        setComentariosContagemPorPost({});
+        return;
+      }
+      const [curtidasRes, comentariosRes] = await Promise.all([
+        supabase.from("curtidas_post").select("post_id, usuario_id").in("post_id", postIds),
+        supabase.from("comentarios_post").select("post_id").in("post_id", postIds),
+      ]);
+      setCarregandoPosts(false);
+      if (curtidasRes.error) {
+        console.error("Erro ao carregar curtidas:", curtidasRes.error);
+      } else {
+        const contagem = {};
+        const minhas = {};
+        for (const r of curtidasRes.data || []) {
+          contagem[r.post_id] = (contagem[r.post_id] || 0) + 1;
+          if (r.usuario_id === session.user.id) minhas[r.post_id] = true;
+        }
+        setCurtidasPorPost(contagem);
+        setCurtidoPorMim(minhas);
+      }
+      if (comentariosRes.error) {
+        console.error("Erro ao carregar contagem de comentários dos posts:", comentariosRes.error);
+      } else {
+        const contagem = {};
+        for (const r of comentariosRes.data || []) {
+          contagem[r.post_id] = (contagem[r.post_id] || 0) + 1;
+        }
+        setComentariosContagemPorPost(contagem);
+      }
     }
     carregarPosts();
   }, [aba, seguindo, session]);
@@ -837,6 +885,151 @@ export default function Filmoteca() {
       return;
     }
     setPosts((atual) => atual.filter((p) => p.id !== post.id));
+  }
+
+  async function alternarCurtida(post) {
+    if (curtindoPost === post.id) return;
+    setCurtindoPost(post.id);
+    const jaCurtiu = !!curtidoPorMim[post.id];
+    if (jaCurtiu) {
+      const { error } = await supabase
+        .from("curtidas_post")
+        .delete()
+        .eq("post_id", post.id)
+        .eq("usuario_id", session.user.id);
+      setCurtindoPost(null);
+      if (error) {
+        console.error("Erro ao remover curtida:", error);
+        alert("Não foi possível remover a curtida. Tente novamente.");
+        return;
+      }
+      setCurtidoPorMim((atual) => {
+        const novo = { ...atual };
+        delete novo[post.id];
+        return novo;
+      });
+      setCurtidasPorPost((atual) => ({
+        ...atual,
+        [post.id]: Math.max(0, (atual[post.id] || 1) - 1),
+      }));
+    } else {
+      const { error } = await supabase
+        .from("curtidas_post")
+        .insert({ post_id: post.id, usuario_id: session.user.id });
+      setCurtindoPost(null);
+      if (error && error.code !== "23505") {
+        console.error("Erro ao curtir:", error);
+        alert("Não foi possível curtir. Tente novamente.");
+        return;
+      }
+      setCurtidoPorMim((atual) => ({ ...atual, [post.id]: true }));
+      if (!error) {
+        setCurtidasPorPost((atual) => ({ ...atual, [post.id]: (atual[post.id] || 0) + 1 }));
+      }
+    }
+  }
+
+  function alternarComentariosPost(postId) {
+    if (postComentariosAberto === postId) {
+      setPostComentariosAberto(null);
+      return;
+    }
+    setPostComentariosAberto(postId);
+    setNovoComentarioPost("");
+    if (!comentariosPorPost[postId]) {
+      carregarComentariosPost(postId);
+    }
+  }
+
+  async function carregarComentariosPost(postId) {
+    setCarregandoComentariosPost(postId);
+    const { data, error } = await supabase
+      .from("comentarios_post")
+      .select("*")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: false });
+    setCarregandoComentariosPost(null);
+    if (error) {
+      console.error("Erro ao carregar comentários do post:", error);
+      return;
+    }
+    const lista = data || [];
+    setComentariosPorPost((atual) => ({ ...atual, [postId]: lista }));
+    const idsFaltando = [
+      ...new Set(
+        lista
+          .map((c) => c.autor_id)
+          .filter(
+            (autorId) =>
+              autorId !== session.user.id &&
+              !perfisPorId[autorId] &&
+              !perfisAutoresComentariosPost[autorId]
+          )
+      ),
+    ];
+    if (idsFaltando.length === 0) return;
+    const { data: perfisData, error: erroPerfis } = await supabase
+      .from("perfis")
+      .select("user_id, nick, nome, avatar_url")
+      .in("user_id", idsFaltando);
+    if (erroPerfis) {
+      console.error("Erro ao carregar perfis dos autores dos comentários:", erroPerfis);
+      return;
+    }
+    setPerfisAutoresComentariosPost((atual) => {
+      const novo = { ...atual };
+      for (const p of perfisData || []) novo[p.user_id] = p;
+      return novo;
+    });
+  }
+
+  function resolverAutorComentarioPost(autorId) {
+    if (autorId === session.user.id) return perfilProprio;
+    return perfisPorId[autorId] || perfisAutoresComentariosPost[autorId] || null;
+  }
+
+  async function enviarComentarioPost(postId) {
+    if (enviandoComentarioPost) return;
+    const texto = novoComentarioPost.trim();
+    if (!texto || texto.length > 300) return;
+    setEnviandoComentarioPost(true);
+    const { data, error } = await supabase
+      .from("comentarios_post")
+      .insert({ post_id: postId, autor_id: session.user.id, mensagem: texto })
+      .select()
+      .single();
+    setEnviandoComentarioPost(false);
+    if (error) {
+      console.error("Erro ao enviar comentário:", error);
+      alert("Não foi possível enviar o comentário. Tente novamente.");
+      return;
+    }
+    setComentariosPorPost((atual) => ({
+      ...atual,
+      [postId]: [data, ...(atual[postId] || [])],
+    }));
+    setComentariosContagemPorPost((atual) => ({ ...atual, [postId]: (atual[postId] || 0) + 1 }));
+    setNovoComentarioPost("");
+  }
+
+  async function apagarComentarioPost(postId, comentarioId) {
+    if (apagandoComentarioPost) return;
+    setApagandoComentarioPost(comentarioId);
+    const { error } = await supabase.from("comentarios_post").delete().eq("id", comentarioId);
+    setApagandoComentarioPost(null);
+    if (error) {
+      console.error("Erro ao apagar comentário:", error);
+      alert("Não foi possível apagar o comentário. Tente novamente.");
+      return;
+    }
+    setComentariosPorPost((atual) => ({
+      ...atual,
+      [postId]: (atual[postId] || []).filter((c) => c.id !== comentarioId),
+    }));
+    setComentariosContagemPorPost((atual) => ({
+      ...atual,
+      [postId]: Math.max(0, (atual[postId] || 1) - 1),
+    }));
   }
 
   function handleVerComentariosProprio(filme) {
@@ -1411,8 +1604,139 @@ export default function Filmoteca() {
                           alt="Publicação"
                           className="w-full aspect-square object-cover"
                         />
+
+                        <div className="flex items-center gap-1.5 px-3 pt-2">
+                          <button
+                            onClick={() => alternarCurtida(post)}
+                            disabled={curtindoPost === post.id}
+                            className="flex items-center gap-1.5 text-sm disabled:opacity-60"
+                          >
+                            <Heart
+                              className={`w-5 h-5 transition ${
+                                curtidoPorMim[post.id]
+                                  ? "fill-[#D97757] text-[#D97757]"
+                                  : "text-[#8A857C]"
+                              }`}
+                            />
+                            <span
+                              className={
+                                curtidoPorMim[post.id]
+                                  ? "text-[#D97757] font-medium"
+                                  : "text-[#8A857C]"
+                              }
+                            >
+                              {curtidasPorPost[post.id] || 0} curtidas
+                            </span>
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => alternarComentariosPost(post.id)}
+                          className="text-xs text-[#8A857C] hover:text-[#F1EEE6] transition px-3 pt-1 pb-2"
+                        >
+                          {(comentariosContagemPorPost[post.id] || 0) > 0
+                            ? `Ver ${comentariosContagemPorPost[post.id]} comentário${
+                                comentariosContagemPorPost[post.id] > 1 ? "s" : ""
+                              }`
+                            : "Comentar"}
+                        </button>
+
                         {post.legenda && (
-                          <p className="text-sm p-3 break-words">{post.legenda}</p>
+                          <p className="text-sm px-3 pb-3 break-words">{post.legenda}</p>
+                        )}
+
+                        {postComentariosAberto === post.id && (
+                          <div className="border-t border-[#2A2622] p-3">
+                            <div className="mb-3">
+                              <textarea
+                                value={novoComentarioPost}
+                                onChange={(e) =>
+                                  setNovoComentarioPost(e.target.value.slice(0, 300))
+                                }
+                                maxLength={300}
+                                rows={2}
+                                disabled={enviandoComentarioPost}
+                                placeholder="Escreva um comentário..."
+                                className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D97757] resize-none disabled:opacity-60"
+                              />
+                              <div className="flex items-center justify-between mt-1">
+                                <span className="text-[10px] text-[#8A857C]">
+                                  {novoComentarioPost.length}/300
+                                </span>
+                                <button
+                                  onClick={() => enviarComentarioPost(post.id)}
+                                  disabled={enviandoComentarioPost || !novoComentarioPost.trim()}
+                                  className="px-4 py-1.5 text-sm font-medium rounded-lg bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
+                                >
+                                  {enviandoComentarioPost ? "Enviando..." : "Enviar"}
+                                </button>
+                              </div>
+                            </div>
+
+                            {carregandoComentariosPost === post.id ? (
+                              <p className="text-xs text-[#8A857C]">Carregando comentários...</p>
+                            ) : (comentariosPorPost[post.id] || []).length === 0 ? (
+                              <p className="text-xs text-[#8A857C]">Nenhum comentário ainda.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {(comentariosPorPost[post.id] || []).map((c) => {
+                                  const autorComentario = resolverAutorComentarioPost(
+                                    c.autor_id
+                                  );
+                                  const podeApagarComentario =
+                                    post.autor_id === session.user.id ||
+                                    c.autor_id === session.user.id;
+                                  return (
+                                    <div
+                                      key={c.id}
+                                      className="bg-[#12100E] border border-[#2A2622] rounded-lg p-3"
+                                    >
+                                      <div className="flex items-start gap-2">
+                                        <span className="w-7 h-7 rounded-full overflow-hidden bg-[#1B1815] border border-[#2A2622] flex items-center justify-center shrink-0">
+                                          {autorComentario?.avatar_url ? (
+                                            <img
+                                              src={autorComentario.avatar_url}
+                                              alt={autorComentario.nick}
+                                              className="w-full h-full object-cover"
+                                            />
+                                          ) : (
+                                            <User className="w-3.5 h-3.5 text-[#8A857C]" />
+                                          )}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <p className="text-xs font-medium truncate">
+                                              {autorComentario?.nome ||
+                                                autorComentario?.nick ||
+                                                "..."}
+                                            </p>
+                                            {podeApagarComentario && (
+                                              <button
+                                                onClick={() =>
+                                                  apagarComentarioPost(post.id, c.id)
+                                                }
+                                                disabled={apagandoComentarioPost === c.id}
+                                                aria-label="Excluir comentário"
+                                                className="text-[#8A857C] hover:text-red-400 transition disabled:opacity-60 shrink-0"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+                                          </div>
+                                          <p className="text-sm mt-0.5 break-words">
+                                            {c.mensagem}
+                                          </p>
+                                          <p className="text-[10px] text-[#8A857C] mt-1">
+                                            {formatarTempoRelativo(c.created_at)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     );
