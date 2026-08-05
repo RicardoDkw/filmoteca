@@ -166,6 +166,7 @@ export default function Filmoteca() {
       const { data, error } = await supabase
         .from("filmes")
         .select("*")
+        .eq("user_id", session.user.id)
         .order("created_at", { ascending: true });
       if (error) {
         console.error("Erro ao carregar filmes:", error);
@@ -723,7 +724,8 @@ export default function Filmoteca() {
     const { error } = await supabase
       .from("filmes")
       .update({ rating: valor, status: "assistido" })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", session.user.id);
     if (error) {
       console.error("Erro ao avaliar filme:", error);
       alert("Não foi possível salvar a nota. Tente novamente.");
@@ -743,7 +745,8 @@ export default function Filmoteca() {
     const { error } = await supabase
       .from("filmes")
       .update({ status: "quero", rating: null })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", session.user.id);
     if (error) {
       console.error("Erro ao mover filme:", error);
       alert("Não foi possível mover o filme. Tente novamente.");
