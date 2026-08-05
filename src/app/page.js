@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Star, Plus, X, Film, LogOut } from "lucide-react";
+import { Search, Star, Plus, X, Film, LogOut, Lock, Users, ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
+import ToastConquistas from "@/components/ToastConquistas";
 import { GENEROS_TMDB } from "@/lib/genres";
+import { BADGES, calcularDesbloqueadas } from "@/lib/badges";
 
 const CORES_CONFETE = ["#D97757", "#E5896D", "#F1EEE6"];
 
@@ -86,6 +88,8 @@ export default function Filmoteca() {
   const [providersMap, setProvidersMap] = useState({});
   const [confeteAtivo, setConfeteAtivo] = useState(false);
   const [onboardingFechado, setOnboardingFechado] = useState(false);
+  const [toastConquistas, setToastConquistas] = useState(null);
+  const [sincronizandoConquistas, setSincronizandoConquistas] = useState(false);
   const [recomendacoes, setRecomendacoes] = useState([]);
   const [assinaturaRecomendacoes, setAssinaturaRecomendacoes] = useState(null);
   const [salvandoRecomendacao, setSalvandoRecomendacao] = useState(null);
@@ -97,6 +101,15 @@ export default function Filmoteca() {
   const [paginaGenero, setPaginaGenero] = useState(1);
   const [carregandoMaisGenero, setCarregandoMaisGenero] = useState(false);
   const [semMaisGenero, setSemMaisGenero] = useState(false);
+  const [buscaEmailAmigo, setBuscaEmailAmigo] = useState("");
+  const [buscandoAmigo, setBuscandoAmigo] = useState(false);
+  const [erroBuscaAmigo, setErroBuscaAmigo] = useState("");
+  const [seguindo, setSeguindo] = useState([]);
+  const [perfisSeguindo, setPerfisSeguindo] = useState({});
+  const [amigoSelecionado, setAmigoSelecionado] = useState(null);
+  const [assistidosDoAmigo, setAssistidosDoAmigo] = useState({});
+  const [carregandoAssistidosAmigo, setCarregandoAssistidosAmigo] = useState(false);
+  const [deixandoDeSeguir, setDeixandoDeSeguir] = useState(null);
 
   // observa a sessão de autenticação
   useEffect(() => {
@@ -139,6 +152,140 @@ export default function Filmoteca() {
     await supabase.auth.signOut();
   }
 
+  // carrega quem o usuário segue e resolve os e-mails pra exibição
+  useEffect(() => {
+    if (!session) {
+      const limpar = setTimeout(() => {
+        setSeguindo([]);
+        setPerfisSeguindo({});
+      }, 0);
+      return () => clearTimeout(limpar);
+    }
+    let ativo = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from("seguidores")
+        .select("*")
+        .eq("seguidor_id", session.user.id);
+      if (error) {
+        console.error("Erro ao carregar seguidores:", error);
+        return;
+      }
+      if (!ativo) return;
+      setSeguindo(data || []);
+      const ids = (data || []).map((s) => s.seguido_id);
+      if (ids.length === 0) return;
+      const res = await fetch("/api/perfis-usuarios", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ userIds: ids }),
+      });
+      const perfisData = await res.json();
+      if (!ativo) return;
+      const mapa = {};
+      for (const u of perfisData.usuarios || []) mapa[u.id] = u.email;
+      setPerfisSeguindo(mapa);
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [session]);
+
+  async function seguirUsuario() {
+    if (buscandoAmigo) return;
+    const email = buscaEmailAmigo.trim();
+    if (!email) {
+      setErroBuscaAmigo("Informe um e-mail.");
+      return;
+    }
+    setErroBuscaAmigo("");
+    setBuscandoAmigo(true);
+    const res = await fetch("/api/buscar-usuario", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setBuscandoAmigo(false);
+      if (res.status === 404) {
+        setErroBuscaAmigo("Usuário não encontrado.");
+      } else if (res.status === 401) {
+        setErroBuscaAmigo("Sua sessão expirou. Atualize a página e faça login novamente.");
+      } else {
+        console.error("Erro ao buscar usuário:", res.status, data);
+        setErroBuscaAmigo("Não foi possível buscar o usuário. Tente novamente.");
+      }
+      return;
+    }
+    if (data.userId === session.user.id) {
+      setBuscandoAmigo(false);
+      setErroBuscaAmigo("Você não pode seguir a si mesmo.");
+      return;
+    }
+    const { data: novo, error } = await supabase
+      .from("seguidores")
+      .insert({ seguidor_id: session.user.id, seguido_id: data.userId })
+      .select()
+      .single();
+    setBuscandoAmigo(false);
+    if (error) {
+      if (error.code === "23505") {
+        setErroBuscaAmigo("Você já segue esse usuário.");
+      } else {
+        console.error("Erro ao seguir usuário:", error);
+        setErroBuscaAmigo("Não foi possível seguir esse usuário. Tente novamente.");
+      }
+      return;
+    }
+    setSeguindo((atual) => [...atual, novo]);
+    setPerfisSeguindo((atual) => ({ ...atual, [data.userId]: email }));
+    setBuscaEmailAmigo("");
+  }
+
+  async function deixarDeSeguir(id) {
+    if (deixandoDeSeguir) return;
+    setDeixandoDeSeguir(id);
+    const { error } = await supabase
+      .from("seguidores")
+      .delete()
+      .eq("seguidor_id", session.user.id)
+      .eq("seguido_id", id);
+    setDeixandoDeSeguir(null);
+    if (error) {
+      console.error("Erro ao deixar de seguir:", error);
+      alert("Não foi possível deixar de seguir. Tente novamente.");
+      return;
+    }
+    setSeguindo((atual) => atual.filter((s) => s.seguido_id !== id));
+    if (amigoSelecionado === id) setAmigoSelecionado(null);
+  }
+
+  function abrirAmigo(id) {
+    setAmigoSelecionado(id);
+    if (assistidosDoAmigo[id]) return;
+    setCarregandoAssistidosAmigo(true);
+    supabase
+      .from("filmes")
+      .select("*")
+      .eq("user_id", id)
+      .eq("status", "assistido")
+      .then(({ data, error }) => {
+        setCarregandoAssistidosAmigo(false);
+        if (error) {
+          console.error("Erro ao carregar assistidos do amigo:", error);
+          return;
+        }
+        setAssistidosDoAmigo((atual) => ({ ...atual, [id]: data || [] }));
+      });
+  }
+
   // primeiro acesso: sem filmes salvos e onboarding nunca visto
   const mostrarOnboarding =
     !!session &&
@@ -152,6 +299,42 @@ export default function Filmoteca() {
     const { error } = await supabase.auth.updateUser({ data: { onboarding_visto: true } });
     if (error) console.error("Erro ao salvar onboarding:", error);
   }
+
+  const badgesDesbloqueadasAgora = calcularDesbloqueadas(filmes);
+  // mapa { id: dataISO } persistido permanentemente — uma vez conquistada, nunca sai daqui
+  const badgesConquistadas = session?.user?.user_metadata?.badges_conquistadas || {};
+  const novasConquistas = badgesDesbloqueadasAgora.filter((id) => !(id in badgesConquistadas));
+  // o que aparece na tela é a união: permanentes + as que o critério atual ainda cumpre
+  const badgesParaExibir = Array.from(
+    new Set([...Object.keys(badgesConquistadas), ...badgesDesbloqueadasAgora])
+  );
+
+  // ao detectar conquistas novas, mostra o toast uma vez e adiciona permanentemente ao
+  // mapa salvo em user_metadata (nunca remove uma badge já conquistada anteriormente)
+  useEffect(() => {
+    if (
+      novasConquistas.length === 0 ||
+      sincronizandoConquistas ||
+      carregandoFilmes ||
+      !session
+    ) {
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSincronizandoConquistas(true);
+      setToastConquistas(BADGES.filter((b) => novasConquistas.includes(b.id)));
+      const agora = new Date().toISOString();
+      const atualizadas = { ...badgesConquistadas };
+      for (const id of novasConquistas) atualizadas[id] = agora;
+      const { error } = await supabase.auth.updateUser({
+        data: { badges_conquistadas: atualizadas },
+      });
+      if (error) console.error("Erro ao salvar conquistas:", error);
+      setSincronizandoConquistas(false);
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [novasConquistas.join(","), carregandoFilmes, session]);
 
   // busca na API do TMDb enquanto o usuário digita
   useEffect(() => {
@@ -570,6 +753,7 @@ export default function Filmoteca() {
             { key: "quero", label: "Quero ver" },
             { key: "descobrir", label: "Descobrir" },
             { key: "estatisticas", label: "Estatísticas" },
+            { key: "amigos", label: "Amigos" },
           ].map((t) => (
             <button
               key={t.key}
@@ -648,6 +832,32 @@ export default function Filmoteca() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <p className="text-xs text-[#8A857C] mb-2">Conquistas</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {BADGES.map((b) => {
+                    const desbloqueada = badgesParaExibir.includes(b.id);
+                    return (
+                      <div
+                        key={b.id}
+                        className={`relative rounded-lg border p-3 flex flex-col items-center text-center gap-1 transition ${
+                          desbloqueada
+                            ? "bg-[#1B1815] border-[#D97757]"
+                            : "bg-[#1B1815] border-[#2A2622] opacity-40 grayscale"
+                        }`}
+                      >
+                        {!desbloqueada && (
+                          <Lock className="w-3 h-3 text-[#8A857C] absolute top-1.5 right-1.5" />
+                        )}
+                        <span className="text-2xl">{b.emoji}</span>
+                        <p className="text-[11px] font-medium leading-tight">{b.nome}</p>
+                        <p className="text-[9px] text-[#8A857C] leading-tight">{b.descricao}</p>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           ) : aba === "descobrir" ? (
@@ -756,6 +966,111 @@ export default function Filmoteca() {
                 )
               )}
             </div>
+          ) : aba === "amigos" ? (
+            amigoSelecionado !== null ? (
+              <div>
+                <button
+                  onClick={() => setAmigoSelecionado(null)}
+                  className="flex items-center gap-1 text-xs text-[#8A857C] hover:text-[#F1EEE6] transition mb-3"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Voltar
+                </button>
+                <p className="text-sm font-medium mb-3 truncate">
+                  Assistidos de {perfisSeguindo[amigoSelecionado] || "..."}
+                </p>
+                {carregandoAssistidosAmigo ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {Array.from({ length: 4 }, (_, i) => (
+                      <SkeletonCard key={i} />
+                    ))}
+                  </div>
+                ) : (assistidosDoAmigo[amigoSelecionado] || []).length === 0 ? (
+                  <p className="text-[#8A857C] text-center py-16 text-sm">
+                    Esse amigo ainda não tem nada assistido.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {assistidosDoAmigo[amigoSelecionado].map((f) => (
+                      <div
+                        key={f.id}
+                        className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622]"
+                      >
+                        <img
+                          src={f.poster}
+                          alt={f.title}
+                          className="w-full aspect-[2/3] object-cover"
+                        />
+                        <div className="p-3">
+                          <p className="font-medium text-sm leading-tight">{f.title}</p>
+                          <p className="text-xs text-[#8A857C] mt-0.5">{f.year}</p>
+                          <div className="flex items-center gap-1 mt-2 text-[#D97757] font-medium text-sm">
+                            <Star className="w-3.5 h-3.5 fill-[#D97757]" />
+                            {f.rating ?? "—"}/10
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="email"
+                    value={buscaEmailAmigo}
+                    onChange={(e) => setBuscaEmailAmigo(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") seguirUsuario();
+                    }}
+                    placeholder="E-mail do seu amigo"
+                    className="flex-1 bg-[#1B1815] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
+                  />
+                  <button
+                    onClick={seguirUsuario}
+                    disabled={buscandoAmigo}
+                    className="px-4 text-sm font-medium rounded-md bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] transition disabled:opacity-60"
+                  >
+                    {buscandoAmigo ? "Buscando..." : "Seguir"}
+                  </button>
+                </div>
+                {erroBuscaAmigo && (
+                  <p className="text-xs text-red-400 mb-3">{erroBuscaAmigo}</p>
+                )}
+
+                <p className="text-xs text-[#8A857C] mb-2 mt-4">Seguindo</p>
+                {seguindo.length === 0 ? (
+                  <div className="flex flex-col items-center py-16 text-center">
+                    <Users className="w-8 h-8 text-[#8A857C] mb-2" />
+                    <p className="text-[#8A857C] text-sm">Você ainda não segue ninguém.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {seguindo.map((s) => (
+                      <div
+                        key={s.seguido_id}
+                        className="flex items-center justify-between bg-[#1B1815] border border-[#2A2622] rounded-md p-3"
+                      >
+                        <button
+                          onClick={() => abrirAmigo(s.seguido_id)}
+                          className="text-sm text-left flex-1 hover:text-[#D97757] transition truncate"
+                        >
+                          {perfisSeguindo[s.seguido_id] || "Carregando..."}
+                        </button>
+                        <button
+                          onClick={() => deixarDeSeguir(s.seguido_id)}
+                          disabled={deixandoDeSeguir === s.seguido_id}
+                          className="text-xs text-[#8A857C] hover:text-[#F1EEE6] transition disabled:opacity-60 shrink-0 ml-2"
+                        >
+                          {deixandoDeSeguir === s.seguido_id ? "Removendo..." : "Deixar de seguir"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           ) : lista.length === 0 ? (
             <p className="text-[#8A857C] text-center py-16 text-sm">
               Nada por aqui ainda. Toque no + para adicionar.
@@ -988,6 +1303,13 @@ export default function Filmoteca() {
           visivel={roletaVisivel}
           onClose={fecharRoleta}
           onVerDetalhes={verDetalhesDaRoleta}
+        />
+      )}
+
+      {toastConquistas && (
+        <ToastConquistas
+          badges={toastConquistas}
+          onFechar={() => setToastConquistas(null)}
         />
       )}
     </div>
