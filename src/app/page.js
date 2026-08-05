@@ -17,12 +17,14 @@ import {
   Compass,
   BarChart,
   Globe,
-  Trash2,
+  Bell,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
 import RatingInput, { notaEhValida } from "@/components/RatingInput";
+import ComentariosFilmeModal from "@/components/ComentariosFilmeModal";
+import NotificacoesModal from "@/components/NotificacoesModal";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
 import ToastConquistas from "@/components/ToastConquistas";
@@ -30,7 +32,6 @@ import EscolherNick from "@/components/EscolherNick";
 import PerfilModal from "@/components/PerfilModal";
 import { GENEROS_TMDB } from "@/lib/genres";
 import { BADGES, calcularDesbloqueadas } from "@/lib/badges";
-import { formatarTempoRelativo } from "@/lib/tempo";
 
 const CORES_CONFETE = ["#D97757", "#E5896D", "#F1EEE6"];
 
@@ -137,18 +138,17 @@ export default function Filmoteca() {
   const [amigoSelecionado, setAmigoSelecionado] = useState(null);
   const [assistidosDoAmigo, setAssistidosDoAmigo] = useState({});
   const [carregandoAssistidosAmigo, setCarregandoAssistidosAmigo] = useState(false);
-  const [recadosDoAmigo, setRecadosDoAmigo] = useState({});
-  const [carregandoRecados, setCarregandoRecados] = useState(false);
-  const [perfisAutoresRecados, setPerfisAutoresRecados] = useState({});
-  const [novoRecado, setNovoRecado] = useState("");
-  const [enviandoRecado, setEnviandoRecado] = useState(false);
-  const [apagandoRecado, setApagandoRecado] = useState(null);
   const [deixandoDeSeguir, setDeixandoDeSeguir] = useState(null);
   const [perfilProprio, setPerfilProprio] = useState(null);
   const [perfilCarregadoPara, setPerfilCarregadoPara] = useState(null);
   const [perfisPorId, setPerfisPorId] = useState({});
   const [perfilModalAberto, setPerfilModalAberto] = useState(false);
   const [perfilModalVisivel, setPerfilModalVisivel] = useState(false);
+  const [comentarioFilmeAberto, setComentarioFilmeAberto] = useState(null);
+  const [comentarioFilmeVisivel, setComentarioFilmeVisivel] = useState(false);
+  const [notificacaoModalAberto, setNotificacaoModalAberto] = useState(false);
+  const [notificacaoModalVisivel, setNotificacaoModalVisivel] = useState(false);
+  const [contagemNaoLidas, setContagemNaoLidas] = useState(0);
 
   // observa a sessão de autenticação
   useEffect(() => {
@@ -233,6 +233,63 @@ export default function Filmoteca() {
     setPerfilModalVisivel(false);
     setTimeout(() => setPerfilModalAberto(false), 250);
   }
+
+  async function carregarContagemNaoLidas() {
+    const { count, error } = await supabase
+      .from("notificacoes")
+      .select("id", { count: "exact", head: true })
+      .eq("destinatario_id", session.user.id)
+      .eq("lida", false);
+    if (error) {
+      console.error("Erro ao carregar contagem de notificações:", error);
+      return;
+    }
+    setContagemNaoLidas(count || 0);
+  }
+
+  function abrirNotificacoes() {
+    setNotificacaoModalAberto(true);
+    requestAnimationFrame(() => setNotificacaoModalVisivel(true));
+  }
+
+  function fecharNotificacoes() {
+    setNotificacaoModalVisivel(false);
+    setTimeout(() => setNotificacaoModalAberto(false), 250);
+    carregarContagemNaoLidas();
+  }
+
+  function abrirComentariosPorId(filmeId, ownerId) {
+    const filme = filmes.find((f) => f.id === filmeId && f.user_id === ownerId);
+    if (!filme) return;
+    abrirComentariosFilme(filme);
+  }
+
+  // carrega e atualiza periodicamente a contagem de notificações não lidas
+  useEffect(() => {
+    if (!session) return;
+    let ativo = true;
+    function buscar() {
+      supabase
+        .from("notificacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("destinatario_id", session.user.id)
+        .eq("lida", false)
+        .then(({ count, error }) => {
+          if (!ativo) return;
+          if (error) {
+            console.error("Erro ao carregar contagem de notificações:", error);
+            return;
+          }
+          setContagemNaoLidas(count || 0);
+        });
+    }
+    buscar();
+    const intervalo = setInterval(buscar, 60000);
+    return () => {
+      ativo = false;
+      clearInterval(intervalo);
+    };
+  }, [session]);
 
   // carrega quem o usuário segue e resolve nick/nome/avatar pra exibição
   useEffect(() => {
@@ -351,115 +408,21 @@ export default function Filmoteca() {
 
   function abrirAmigo(id) {
     setAmigoSelecionado(id);
-    setNovoRecado("");
-    if (!assistidosDoAmigo[id]) {
-      setCarregandoAssistidosAmigo(true);
-      supabase
-        .from("filmes")
-        .select("*")
-        .eq("user_id", id)
-        .eq("status", "assistido")
-        .then(({ data, error }) => {
-          setCarregandoAssistidosAmigo(false);
-          if (error) {
-            console.error("Erro ao carregar assistidos do amigo:", error);
-            return;
-          }
-          setAssistidosDoAmigo((atual) => ({ ...atual, [id]: data || [] }));
-        });
-    }
-    if (!recadosDoAmigo[id]) {
-      carregarRecados(id);
-    }
-  }
-
-  async function carregarRecados(id) {
-    setCarregandoRecados(true);
-    const { data, error } = await supabase
-      .from("recados")
+    if (assistidosDoAmigo[id]) return;
+    setCarregandoAssistidosAmigo(true);
+    supabase
+      .from("filmes")
       .select("*")
-      .eq("perfil_id", id)
-      .order("created_at", { ascending: false });
-    setCarregandoRecados(false);
-    if (error) {
-      console.error("Erro ao carregar recados:", error);
-      return;
-    }
-    setRecadosDoAmigo((atual) => ({ ...atual, [id]: data || [] }));
-    resolverAutoresDeRecados(data || []);
-  }
-
-  async function resolverAutoresDeRecados(recados) {
-    const idsFaltando = [
-      ...new Set(
-        recados
-          .map((r) => r.autor_id)
-          .filter(
-            (autorId) =>
-              autorId !== session.user.id &&
-              !perfisPorId[autorId] &&
-              !perfisAutoresRecados[autorId]
-          )
-      ),
-    ];
-    if (idsFaltando.length === 0) return;
-    const { data, error } = await supabase
-      .from("perfis")
-      .select("user_id, nick, nome, avatar_url")
-      .in("user_id", idsFaltando);
-    if (error) {
-      console.error("Erro ao carregar perfis dos autores dos recados:", error);
-      return;
-    }
-    setPerfisAutoresRecados((atual) => {
-      const novo = { ...atual };
-      for (const p of data || []) novo[p.user_id] = p;
-      return novo;
-    });
-  }
-
-  function resolverAutor(autorId) {
-    if (autorId === session.user.id) return perfilProprio;
-    return perfisPorId[autorId] || perfisAutoresRecados[autorId] || null;
-  }
-
-  async function enviarRecado() {
-    if (enviandoRecado) return;
-    const texto = novoRecado.trim();
-    if (!texto || texto.length > 300 || !amigoSelecionado) return;
-    setEnviandoRecado(true);
-    const { data, error } = await supabase
-      .from("recados")
-      .insert({ perfil_id: amigoSelecionado, autor_id: session.user.id, mensagem: texto })
-      .select()
-      .single();
-    setEnviandoRecado(false);
-    if (error) {
-      console.error("Erro ao enviar recado:", error);
-      alert("Não foi possível enviar o recado. Tente novamente.");
-      return;
-    }
-    setRecadosDoAmigo((atual) => ({
-      ...atual,
-      [amigoSelecionado]: [data, ...(atual[amigoSelecionado] || [])],
-    }));
-    setNovoRecado("");
-  }
-
-  async function apagarRecado(id) {
-    if (apagandoRecado || !amigoSelecionado) return;
-    setApagandoRecado(id);
-    const { error } = await supabase.from("recados").delete().eq("id", id);
-    setApagandoRecado(null);
-    if (error) {
-      console.error("Erro ao apagar recado:", error);
-      alert("Não foi possível apagar o recado. Tente novamente.");
-      return;
-    }
-    setRecadosDoAmigo((atual) => ({
-      ...atual,
-      [amigoSelecionado]: (atual[amigoSelecionado] || []).filter((r) => r.id !== id),
-    }));
+      .eq("user_id", id)
+      .eq("status", "assistido")
+      .then(({ data, error }) => {
+        setCarregandoAssistidosAmigo(false);
+        if (error) {
+          console.error("Erro ao carregar assistidos do amigo:", error);
+          return;
+        }
+        setAssistidosDoAmigo((atual) => ({ ...atual, [id]: data || [] }));
+      });
   }
 
   // primeiro acesso: sem filmes salvos e onboarding nunca visto
@@ -760,6 +723,21 @@ export default function Filmoteca() {
     setTimeout(() => setDetalheAberto(null), 250);
   }
 
+  function abrirComentariosFilme(filme) {
+    setComentarioFilmeAberto(filme);
+    requestAnimationFrame(() => setComentarioFilmeVisivel(true));
+  }
+
+  function fecharComentariosFilme() {
+    setComentarioFilmeVisivel(false);
+    setTimeout(() => setComentarioFilmeAberto(null), 250);
+  }
+
+  function handleVerComentariosProprio(filme) {
+    fecharDetalhe();
+    setTimeout(() => abrirComentariosFilme(filme), 260);
+  }
+
   function abrirRoleta() {
     setRoletaAberta(true);
     requestAnimationFrame(() => setRoletaVisivel(true));
@@ -963,6 +941,18 @@ export default function Filmoteca() {
             <h1 className="text-2xl font-bold tracking-wide">MINHA FILMOTECA</h1>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={abrirNotificacoes}
+              aria-label="Notificações"
+              className="relative text-[#8A857C] hover:text-[#F1EEE6] transition p-1"
+            >
+              <Bell className="w-4 h-4" />
+              {contagemNaoLidas > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-medium flex items-center justify-center">
+                  {contagemNaoLidas > 9 ? "9+" : contagemNaoLidas}
+                </span>
+              )}
+            </button>
             <button
               onClick={abrirPerfilModal}
               aria-label="Meu perfil"
@@ -1232,7 +1222,8 @@ export default function Filmoteca() {
                     {assistidosDoAmigo[amigoSelecionado].map((f) => (
                       <div
                         key={f.id}
-                        className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622]"
+                        onClick={() => abrirComentariosFilme(f)}
+                        className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 active:scale-95"
                       >
                         <img
                           src={f.poster}
@@ -1251,91 +1242,6 @@ export default function Filmoteca() {
                     ))}
                   </div>
                 )}
-
-                <div className="border-t border-[#2A2622] pt-4 mt-4">
-                  <p className="text-sm font-medium mb-3">Recados</p>
-
-                  {amigoSelecionado !== session.user.id && (
-                    <div className="mb-4">
-                      <textarea
-                        value={novoRecado}
-                        onChange={(e) => setNovoRecado(e.target.value.slice(0, 300))}
-                        maxLength={300}
-                        rows={2}
-                        disabled={enviandoRecado}
-                        placeholder="Deixe um recado..."
-                        className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757] resize-none disabled:opacity-60"
-                      />
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-[10px] text-[#8A857C]">
-                          {novoRecado.length}/300
-                        </span>
-                        <button
-                          onClick={enviarRecado}
-                          disabled={enviandoRecado || !novoRecado.trim()}
-                          className="px-4 py-1.5 text-sm font-medium rounded-md bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] transition disabled:opacity-60"
-                        >
-                          {enviandoRecado ? "Enviando..." : "Enviar"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {carregandoRecados ? (
-                    <p className="text-xs text-[#8A857C]">Carregando recados...</p>
-                  ) : (recadosDoAmigo[amigoSelecionado] || []).length === 0 ? (
-                    <p className="text-xs text-[#8A857C]">Nenhum recado ainda.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(recadosDoAmigo[amigoSelecionado] || []).map((r) => {
-                        const autor = resolverAutor(r.autor_id);
-                        const podeApagar =
-                          amigoSelecionado === session.user.id || r.autor_id === session.user.id;
-                        return (
-                          <div
-                            key={r.id}
-                            className="bg-[#1B1815] border border-[#2A2622] rounded-md p-3"
-                          >
-                            <div className="flex items-start gap-2">
-                              <span className="w-7 h-7 rounded-full overflow-hidden bg-[#12100E] border border-[#2A2622] flex items-center justify-center shrink-0">
-                                {autor?.avatar_url ? (
-                                  <img
-                                    src={autor.avatar_url}
-                                    alt={autor.nick}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <User className="w-3.5 h-3.5 text-[#8A857C]" />
-                                )}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-xs font-medium truncate">
-                                    {autor?.nome || autor?.nick || "..."}
-                                  </p>
-                                  {podeApagar && (
-                                    <button
-                                      onClick={() => apagarRecado(r.id)}
-                                      disabled={apagandoRecado === r.id}
-                                      aria-label="Excluir recado"
-                                      className="text-[#8A857C] hover:text-red-400 transition disabled:opacity-60 shrink-0"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                </div>
-                                <p className="text-sm mt-0.5 break-words">{r.mensagem}</p>
-                                <p className="text-[10px] text-[#8A857C] mt-1">
-                                  {formatarTempoRelativo(r.created_at)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
               </div>
             ) : (
               <div>
@@ -1648,6 +1554,27 @@ export default function Filmoteca() {
           onClose={fecharDetalhe}
           onAvaliar={avaliar}
           onMoverParaQuero={moverParaQuero}
+          onVerComentarios={handleVerComentariosProprio}
+        />
+      )}
+
+      {comentarioFilmeAberto && (
+        <ComentariosFilmeModal
+          filme={comentarioFilmeAberto}
+          visivel={comentarioFilmeVisivel}
+          onClose={fecharComentariosFilme}
+          sessionUserId={session.user.id}
+          perfilProprio={perfilProprio}
+          perfisConhecidos={perfisPorId}
+        />
+      )}
+
+      {notificacaoModalAberto && (
+        <NotificacoesModal
+          visivel={notificacaoModalVisivel}
+          onClose={fecharNotificacoes}
+          sessionUserId={session.user.id}
+          onAbrirFilme={abrirComentariosPorId}
         />
       )}
 

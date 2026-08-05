@@ -25,7 +25,14 @@ function GrupoProviders({ titulo, lista }) {
   );
 }
 
-export default function DetailsModal({ filme, visivel, onClose, onAvaliar, onMoverParaQuero }) {
+export default function DetailsModal({
+  filme,
+  visivel,
+  onClose,
+  onAvaliar,
+  onMoverParaQuero,
+  onVerComentarios,
+}) {
   const [providers, setProviders] = useState(null);
   const [salvandoNota, setSalvandoNota] = useState(null);
   const [notaSalva, setNotaSalva] = useState(false);
@@ -191,9 +198,18 @@ export default function DetailsModal({ filme, visivel, onClose, onAvaliar, onMov
 
         {filme.status === "assistido" && (
           <button
+            onClick={() => onVerComentarios(filme)}
+            className="w-full text-xs text-[#8A857C] hover:text-[#F1EEE6] py-2 mt-3 transition"
+          >
+            Ver comentários
+          </button>
+        )}
+
+        {filme.status === "assistido" && (
+          <button
             onClick={handleMoverParaQuero}
             disabled={movendo}
-            className="w-full text-xs text-[#8A857C] hover:text-[#F1EEE6] py-2 mt-3 transition disabled:opacity-60"
+            className="w-full text-xs text-[#8A857C] hover:text-[#F1EEE6] py-2 transition disabled:opacity-60"
           >
             {movendo ? "Movendo..." : "Mover para Quero ver"}
           </button>
