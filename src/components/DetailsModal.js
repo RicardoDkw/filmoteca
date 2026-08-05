@@ -14,9 +14,9 @@ function GrupoProviders({ titulo, lista }) {
           <div
             key={p.id}
             title={p.name}
-            className="flex items-center gap-1.5 bg-[#12100E] border border-[#2A2622] rounded-md px-2 py-1"
+            className="flex items-center gap-1.5 bg-[#12100E] border border-[#2A2622] rounded-lg px-2 py-1"
           >
-            <img src={p.logo} alt={p.name} className="w-5 h-5 rounded" />
+            <img src={p.logo} alt={p.name} className="w-5 h-5 rounded-md" />
             <span className="text-xs">{p.name}</span>
           </div>
         ))}
@@ -89,7 +89,7 @@ export default function DetailsModal({
       }`}
     >
       <div
-        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
+        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
           visivel
             ? "translate-y-0 sm:scale-100 opacity-100"
             : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
@@ -106,7 +106,7 @@ export default function DetailsModal({
           <img
             src={filme.poster}
             alt={filme.title}
-            className="w-20 h-28 object-cover rounded shrink-0"
+            className="w-20 h-28 object-cover rounded-lg shrink-0"
           />
           <div>
             <p className="font-medium">{filme.title}</p>
@@ -171,7 +171,7 @@ export default function DetailsModal({
                 !notaEhValida(notaInput) ||
                 Number(notaInput) === filme.rating
               }
-              className="w-full mt-2 bg-[#D97757] text-[#12100E] font-medium py-1.5 rounded-md text-sm hover:bg-[#e5896d] transition disabled:opacity-60"
+              className="w-full mt-2 bg-[#D97757] text-[#12100E] font-medium py-1.5 rounded-lg text-sm hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
             >
               {salvandoNota !== null ? "Salvando..." : "Salvar nota"}
             </button>

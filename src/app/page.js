@@ -80,12 +80,21 @@ function Confete({ onFim }) {
 
 function SkeletonCard() {
   return (
-    <div className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622]">
+    <div className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] shadow-lg shadow-black/30">
       <div className="w-full aspect-[2/3] bg-[#2A2622] animate-pulse" />
       <div className="p-3 space-y-2">
-        <div className="h-3 bg-[#2A2622] rounded animate-pulse w-4/5" />
-        <div className="h-3 bg-[#2A2622] rounded animate-pulse w-1/3" />
+        <div className="h-3 bg-[#2A2622] rounded-md animate-pulse w-4/5" />
+        <div className="h-3 bg-[#2A2622] rounded-md animate-pulse w-1/3" />
       </div>
+    </div>
+  );
+}
+
+function SectionTitle({ icon: Icon, children }) {
+  return (
+    <div className="flex items-center gap-2 mb-4 pl-3 border-l-4 border-[#D97757]">
+      {Icon && <Icon className="w-5 h-5 text-[#D97757] shrink-0" />}
+      <h2 className="text-lg font-bold tracking-wide">{children}</h2>
     </div>
   );
 }
@@ -507,6 +516,13 @@ export default function Filmoteca() {
       (a, b) =>
         b.rating - a.rating || new Date(b.created_at) - new Date(a.created_at)
     )[0];
+  const topAvaliados = avaliados
+    .slice()
+    .sort(
+      (a, b) =>
+        b.rating - a.rating || new Date(b.created_at) - new Date(a.created_at)
+    )
+    .slice(0, 8);
   const generoContagem = Object.entries(
     assistidos
       .flatMap((f) => f.genres || [])
@@ -935,7 +951,7 @@ export default function Filmoteca() {
   return (
     <div className="min-h-screen bg-[#12100E] text-[#F1EEE6] p-6">
       <div className="max-w-md mx-auto pb-24 sm:pb-20">
-        <header className="flex items-center justify-between gap-2 mb-5 pt-1">
+        <header className="flex items-center justify-between gap-2 mb-8 pt-1">
           <div className="flex items-center gap-2">
             <Film className="w-5 h-5 text-[#D97757]" />
             <h1 className="text-2xl font-bold tracking-wide">MINHA FILMOTECA</h1>
@@ -978,7 +994,7 @@ export default function Filmoteca() {
           </div>
         </header>
 
-        <div className="hidden sm:flex gap-1 mb-5 bg-[#1B1815] rounded-lg p-1 border border-[#2A2622]">
+        <div className="hidden sm:flex gap-1 mb-6 bg-[#1B1815] rounded-lg p-1 border border-[#2A2622]">
           {ABAS.map((t) => (
             <button
               key={t.key}
@@ -1002,7 +1018,39 @@ export default function Filmoteca() {
               ))}
             </div>
           ) : aba === "estatisticas" ? (
-            <div className="space-y-5">
+            <div className="space-y-8">
+              <SectionTitle icon={BarChart}>Estatísticas</SectionTitle>
+
+              {topAvaliados.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-[#8A857C] mb-3 uppercase tracking-wider">
+                    Seus melhores avaliados
+                  </p>
+                  <div className="flex gap-3 overflow-x-auto scroll-smooth scrollbar-hide pb-1 -mx-1 px-1">
+                    {topAvaliados.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => abrirDetalhe(f)}
+                        className="shrink-0 w-32 text-left group"
+                      >
+                        <div className="relative rounded-lg overflow-hidden border border-[#2A2622] shadow-lg shadow-black/30 transition-all duration-200 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-black/50">
+                          <img
+                            src={f.poster}
+                            alt={f.title}
+                            className="w-full aspect-[2/3] object-cover"
+                          />
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/85 to-transparent px-2 pt-5 pb-1.5 flex items-center gap-1">
+                            <Star className="w-3.5 h-3.5 fill-[#D97757] text-[#D97757]" />
+                            <span className="text-sm font-bold">{f.rating}/10</span>
+                          </div>
+                        </div>
+                        <p className="text-xs font-medium mt-1.5 truncate">{f.title}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#1B1815] rounded-lg border border-[#2A2622] p-4">
                   <p className="text-xs text-[#8A857C]">Total assistidos</p>
@@ -1016,12 +1064,14 @@ export default function Filmoteca() {
 
               {destaque && (
                 <div>
-                  <p className="text-xs text-[#8A857C] mb-2">Destaque</p>
+                  <p className="text-xs font-semibold text-[#8A857C] mb-3 uppercase tracking-wider">
+                    Destaque
+                  </p>
                   <div className="flex items-center gap-3 bg-[#1B1815] rounded-lg border border-[#D97757] p-3">
                     <img
                       src={destaque.poster}
                       alt={destaque.title}
-                      className="w-14 h-20 object-cover rounded"
+                      className="w-14 h-20 object-cover rounded-lg"
                     />
                     <div>
                       <p className="font-medium text-sm">{destaque.title}</p>
@@ -1036,7 +1086,9 @@ export default function Filmoteca() {
               )}
 
               <div>
-                <p className="text-xs text-[#8A857C] mb-2">Distribuição por gênero</p>
+                <p className="text-xs font-semibold text-[#8A857C] mb-3 uppercase tracking-wider">
+                  Distribuição por gênero
+                </p>
                 {generoContagem.length === 0 ? (
                   <p className="text-[#8A857C] text-center py-8 text-sm">
                     Nenhum filme assistido ainda.
@@ -1060,7 +1112,9 @@ export default function Filmoteca() {
               </div>
 
               <div>
-                <p className="text-xs text-[#8A857C] mb-2">Conquistas</p>
+                <p className="text-xs font-semibold text-[#8A857C] mb-3 uppercase tracking-wider">
+                  Conquistas
+                </p>
                 <div className="grid grid-cols-3 gap-2">
                   {BADGES.map((b) => {
                     const desbloqueada = badgesParaExibir.includes(b.id);
@@ -1087,6 +1141,7 @@ export default function Filmoteca() {
             </div>
           ) : aba === "descobrir" ? (
             <div>
+              <SectionTitle icon={Compass}>Descobrir</SectionTitle>
               <div className="flex gap-1.5 overflow-x-auto pb-2 mb-1">
                 <button
                   onClick={() => selecionarGenero("anime")}
@@ -1142,11 +1197,11 @@ export default function Filmoteca() {
                     : "Nenhuma recomendação encontrada por enquanto."}
                 </p>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex gap-3 overflow-x-auto scroll-smooth scrollbar-hide pb-1 -mx-1 px-1">
                   {itensDescobrir.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10"
+                      className="shrink-0 w-52 bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] shadow-lg shadow-black/30 transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50"
                     >
                       <img
                         src={item.poster}
@@ -1164,7 +1219,7 @@ export default function Filmoteca() {
                         <button
                           onClick={() => adicionarRecomendacao(item)}
                           disabled={salvandoRecomendacao === item.id}
-                          className="mt-2 w-full flex items-center justify-center gap-1 text-xs font-medium py-1.5 rounded-md bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition disabled:opacity-60"
+                          className="mt-2 w-full flex items-center justify-center gap-1 text-xs font-medium py-1.5 rounded-lg bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] hover:scale-[1.02] transition disabled:opacity-60"
                         >
                           <Plus className="w-3 h-3" />
                           {salvandoRecomendacao === item.id ? "Adicionando..." : "Quero ver"}
@@ -1184,7 +1239,7 @@ export default function Filmoteca() {
                   <button
                     onClick={carregarMaisGenero}
                     disabled={carregandoMaisGenero}
-                    className="w-full mt-3 text-sm font-medium py-2 rounded-md bg-[#1B1815] border border-[#2A2622] hover:border-[#D97757] transition disabled:opacity-60"
+                    className="w-full mt-4 text-sm font-medium py-2 rounded-lg bg-[#1B1815] border border-[#2A2622] hover:border-[#D97757] hover:scale-[1.01] transition disabled:opacity-60"
                   >
                     {carregandoMaisGenero ? "Carregando..." : "Carregar mais"}
                   </button>
@@ -1223,7 +1278,7 @@ export default function Filmoteca() {
                       <div
                         key={f.id}
                         onClick={() => abrirComentariosFilme(f)}
-                        className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 active:scale-95"
+                        className="bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] shadow-lg shadow-black/30 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 active:scale-95"
                       >
                         <img
                           src={f.poster}
@@ -1254,12 +1309,12 @@ export default function Filmoteca() {
                       if (e.key === "Enter") seguirUsuario();
                     }}
                     placeholder="Nick do seu amigo"
-                    className="flex-1 bg-[#1B1815] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
+                    className="flex-1 bg-[#1B1815] border border-[#2A2622] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
                   />
                   <button
                     onClick={seguirUsuario}
                     disabled={buscandoAmigo}
-                    className="px-4 text-sm font-medium rounded-md bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] transition disabled:opacity-60"
+                    className="px-4 text-sm font-medium rounded-lg bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
                   >
                     {buscandoAmigo ? "Buscando..." : "Seguir"}
                   </button>
@@ -1268,7 +1323,9 @@ export default function Filmoteca() {
                   <p className="text-xs text-red-400 mb-3">{erroBuscaAmigo}</p>
                 )}
 
-                <p className="text-xs text-[#8A857C] mb-2 mt-4">Seguindo</p>
+                <p className="text-xs font-semibold text-[#8A857C] mb-3 mt-6 uppercase tracking-wider">
+                  Seguindo
+                </p>
                 {seguindo.length === 0 ? (
                   <div className="flex flex-col items-center py-16 text-center">
                     <Users className="w-8 h-8 text-[#8A857C] mb-2" />
@@ -1281,7 +1338,7 @@ export default function Filmoteca() {
                       return (
                       <div
                         key={s.seguido_id}
-                        className="flex items-center justify-between bg-[#1B1815] border border-[#2A2622] rounded-md p-3"
+                        className="flex items-center justify-between bg-[#1B1815] border border-[#2A2622] rounded-lg p-3"
                       >
                         <button
                           onClick={() => abrirAmigo(s.seguido_id)}
@@ -1325,7 +1382,7 @@ export default function Filmoteca() {
               {aba === "quero" && lista.length >= 2 && (
                 <button
                   onClick={abrirRoleta}
-                  className="w-full mb-3 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-md bg-[#1B1815] border border-[#2A2622] hover:border-[#D97757] transition"
+                  className="w-full mb-3 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg bg-[#1B1815] border border-[#2A2622] hover:border-[#D97757] hover:scale-[1.01] transition"
                 >
                   🎲 Sortear
                 </button>
@@ -1339,7 +1396,7 @@ export default function Filmoteca() {
                     <div
                       key={f.id}
                       onClick={() => abrirDetalhe(f)}
-                      className="group relative bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10 active:scale-95"
+                      className="group relative bg-[#1B1815] rounded-lg overflow-hidden border border-[#2A2622] shadow-lg shadow-black/30 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-black/50 hover:z-10 active:scale-95"
                     >
                       <button
                         onClick={(e) => {
@@ -1395,7 +1452,7 @@ export default function Filmoteca() {
                                   e.stopPropagation();
                                   avaliar(f.id, n);
                                 }}
-                                className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition"
+                                className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#2A2622] hover:bg-[#D97757] hover:text-[#12100E] transition"
                               >
                                 {n}
                               </button>
@@ -1413,7 +1470,7 @@ export default function Filmoteca() {
 
         <button
           onClick={abrirModalAdicionar}
-          className="fixed bottom-24 sm:bottom-6 right-6 bg-[#D97757] text-[#12100E] rounded-full w-14 h-14 flex items-center justify-center shadow-lg active:scale-95 transition z-40"
+          className="fixed bottom-24 sm:bottom-6 right-6 bg-[#D97757] text-[#12100E] rounded-full w-14 h-14 flex items-center justify-center shadow-lg shadow-black/40 hover:scale-105 hover:shadow-xl hover:shadow-[#D97757]/30 active:scale-95 transition z-40"
           aria-label="Adicionar filme"
         >
           <Plus className="w-6 h-6" />
@@ -1446,7 +1503,7 @@ export default function Filmoteca() {
           }`}
         >
           <div
-            className={`bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
+            className={`bg-[#1B1815] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
               modalVisivel
                 ? "translate-y-0 sm:scale-100 opacity-100"
                 : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
@@ -1470,7 +1527,7 @@ export default function Filmoteca() {
                     value={busca}
                     onChange={(e) => setBusca(e.target.value)}
                     placeholder="Digite o nome do filme ou série"
-                    className="w-full bg-[#12100E] border border-[#2A2622] rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
+                    className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
                   />
                 </div>
 
@@ -1486,9 +1543,9 @@ export default function Filmoteca() {
                     <button
                       key={r.id}
                       onClick={() => abrirParaAdicionar(r)}
-                      className="w-full flex items-center gap-3 bg-[#12100E] border border-[#2A2622] rounded-md p-2 hover:border-[#D97757] transition text-left"
+                      className="w-full flex items-center gap-3 bg-[#12100E] border border-[#2A2622] rounded-lg p-2 hover:border-[#D97757] transition text-left"
                     >
-                      <img src={r.poster} alt={r.title} className="w-10 h-14 object-cover rounded" />
+                      <img src={r.poster} alt={r.title} className="w-10 h-14 object-cover rounded-md" />
                       <div>
                         <p className="text-sm font-medium">{r.title}</p>
                         <p className="text-xs text-[#8A857C]">
@@ -1505,7 +1562,7 @@ export default function Filmoteca() {
                   <img
                     src={selecionado.poster}
                     alt={selecionado.title}
-                    className="w-16 h-24 object-cover rounded"
+                    className="w-16 h-24 object-cover rounded-md"
                   />
                   <div>
                     <p className="font-medium">{selecionado.title}</p>
@@ -1529,14 +1586,14 @@ export default function Filmoteca() {
                   <button
                     onClick={() => confirmarAdicao("quero")}
                     disabled={salvando}
-                    className="flex-1 border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-md hover:border-[#D97757] transition disabled:opacity-60"
+                    className="flex-1 border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-lg hover:border-[#D97757] hover:scale-[1.02] transition disabled:opacity-60"
                   >
                     Quero assistir
                   </button>
                   <button
                     onClick={() => confirmarAdicao("assistido")}
                     disabled={salvando || (nota !== "" && !notaEhValida(nota))}
-                    className="flex-1 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition disabled:opacity-60"
+                    className="flex-1 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
                   >
                     {salvando ? "Salvando..." : "Já assisti"}
                   </button>

@@ -88,7 +88,7 @@ export default function NotificacoesModal({ visivel, onClose, sessionUserId, onA
       }`}
     >
       <div
-        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
+        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
           visivel
             ? "translate-y-0 sm:scale-100 opacity-100"
             : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
@@ -129,7 +129,7 @@ export default function NotificacoesModal({ visivel, onClose, sessionUserId, onA
                 <button
                   key={n.id}
                   onClick={() => clicarNotificacao(n)}
-                  className={`w-full text-left flex items-start gap-2 p-3 rounded-md transition hover:border-[#D97757] border ${
+                  className={`w-full text-left flex items-start gap-2 p-3 rounded-lg transition hover:border-[#D97757] hover:scale-[1.01] border ${
                     n.lida ? "bg-[#12100E] border-[#2A2622]" : "bg-[#2A2622] border-[#3A352E]"
                   }`}
                 >

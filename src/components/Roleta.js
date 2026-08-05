@@ -56,7 +56,7 @@ export default function Roleta({ lista, visivel, onClose, onVerDetalhes }) {
       }`}
     >
       <div
-        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-sm border border-[#2A2622] transition-all duration-[250ms] ease-out ${
+        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-sm border border-[#2A2622] transition-all duration-[250ms] ease-out ${
           visivel
             ? "translate-y-0 sm:scale-100 opacity-100"
             : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
@@ -102,14 +102,14 @@ export default function Roleta({ lista, visivel, onClose, onVerDetalhes }) {
             {lista.length > 1 && (
               <button
                 onClick={sortear}
-                className="flex-1 border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-md hover:border-[#D97757] transition"
+                className="flex-1 border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-lg hover:border-[#D97757] hover:scale-[1.02] transition"
               >
                 Sortear de novo
               </button>
             )}
             <button
               onClick={() => onVerDetalhes(resultado)}
-              className="flex-1 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition"
+              className="flex-1 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition"
             >
               Ver detalhes
             </button>

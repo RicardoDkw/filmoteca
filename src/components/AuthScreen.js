@@ -126,14 +126,14 @@ export default function AuthScreen() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com"
-                  className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
+                  className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
                 />
                 {erro && <p className="text-xs text-red-400">{erro}</p>}
                 {mensagem && <p className="text-xs text-green-400">{mensagem}</p>}
                 <button
                   type="submit"
                   disabled={carregando}
-                  className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition disabled:opacity-60"
+                  className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
                 >
                   {carregando ? "Enviando..." : "Enviar link de recuperação"}
                 </button>
@@ -152,7 +152,7 @@ export default function AuthScreen() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com"
-                  className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
+                  className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
                 />
                 <div>
                   <input
@@ -160,7 +160,7 @@ export default function AuthScreen() {
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
                     placeholder="Senha"
-                    className={`w-full bg-[#12100E] border rounded-md px-3 py-2 text-sm focus:outline-none transition ${
+                    className={`w-full bg-[#12100E] border rounded-lg px-3 py-2 text-sm focus:outline-none transition ${
                       senhaCurta
                         ? "border-red-400/60 focus:border-red-400"
                         : "border-[#2A2622] focus:border-[#D97757]"
@@ -177,7 +177,7 @@ export default function AuthScreen() {
                 <button
                   type="submit"
                   disabled={carregando}
-                  className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition disabled:opacity-60"
+                  className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
                 >
                   {carregando
                     ? modo === "login"

@@ -62,7 +62,7 @@ export default function Onboarding({ onFinalizar }) {
 
         <button
           onClick={() => (ultimo ? onFinalizar() : setPasso(passo + 1))}
-          className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition"
+          className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition"
         >
           {ultimo ? "Começar" : "Próximo"}
         </button>

@@ -130,7 +130,7 @@ export default function ComentariosFilmeModal({
       }`}
     >
       <div
-        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
+        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
           visivel
             ? "translate-y-0 sm:scale-100 opacity-100"
             : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
@@ -147,7 +147,7 @@ export default function ComentariosFilmeModal({
           <img
             src={filme.poster}
             alt={filme.title}
-            className="w-16 h-24 object-cover rounded shrink-0"
+            className="w-16 h-24 object-cover rounded-lg shrink-0"
           />
           <div>
             <p className="font-medium">{filme.title}</p>
@@ -171,14 +171,14 @@ export default function ComentariosFilmeModal({
                 rows={2}
                 disabled={enviando}
                 placeholder="Deixe um comentário..."
-                className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757] resize-none disabled:opacity-60"
+                className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D97757] resize-none disabled:opacity-60"
               />
               <div className="flex items-center justify-between mt-1">
                 <span className="text-[10px] text-[#8A857C]">{novoComentario.length}/300</span>
                 <button
                   onClick={enviarComentario}
                   disabled={enviando || !novoComentario.trim()}
-                  className="px-4 py-1.5 text-sm font-medium rounded-md bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] transition disabled:opacity-60"
+                  className="px-4 py-1.5 text-sm font-medium rounded-lg bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
                 >
                   {enviando ? "Enviando..." : "Enviar"}
                 </button>
@@ -197,7 +197,7 @@ export default function ComentariosFilmeModal({
                 const podeApagar =
                   filme.user_id === sessionUserId || c.autor_id === sessionUserId;
                 return (
-                  <div key={c.id} className="bg-[#12100E] border border-[#2A2622] rounded-md p-3">
+                  <div key={c.id} className="bg-[#12100E] border border-[#2A2622] rounded-lg p-3">
                     <div className="flex items-start gap-2">
                       <span className="w-7 h-7 rounded-full overflow-hidden bg-[#1B1815] border border-[#2A2622] flex items-center justify-center shrink-0">
                         {autor?.avatar_url ? (

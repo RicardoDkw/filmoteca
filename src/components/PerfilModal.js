@@ -69,7 +69,7 @@ export default function PerfilModal({ perfil, visivel, onClose, onSalvar }) {
       }`}
     >
       <div
-        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-lg p-6 w-full max-w-sm border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
+        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-sm border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
           visivel
             ? "translate-y-0 sm:scale-100 opacity-100"
             : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
@@ -108,7 +108,7 @@ export default function PerfilModal({ perfil, visivel, onClose, onSalvar }) {
             <input
               value={nick}
               onChange={(e) => setNick(e.target.value.trim())}
-              className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 mt-1 text-sm focus:outline-none focus:border-[#D97757]"
+              className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-[#D97757]"
             />
           </div>
 
@@ -117,7 +117,7 @@ export default function PerfilModal({ perfil, visivel, onClose, onSalvar }) {
             <input
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 mt-1 text-sm focus:outline-none focus:border-[#D97757]"
+              className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-[#D97757]"
             />
           </div>
 
@@ -131,7 +131,7 @@ export default function PerfilModal({ perfil, visivel, onClose, onSalvar }) {
               onChange={(e) => setBio(e.target.value.slice(0, 150))}
               maxLength={150}
               rows={3}
-              className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 mt-1 text-sm focus:outline-none focus:border-[#D97757] resize-none"
+              className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-[#D97757] resize-none"
             />
           </div>
 
@@ -140,7 +140,7 @@ export default function PerfilModal({ perfil, visivel, onClose, onSalvar }) {
           <button
             type="submit"
             disabled={salvando || enviandoImagem}
-            className="w-full flex items-center justify-center gap-1.5 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-1.5 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
           >
             {salvando ? (
               "Salvando..."

@@ -80,20 +80,20 @@ export default function ResetPassword() {
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 placeholder="Nova senha"
-                className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
+                className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
               />
               <input
                 type="password"
                 value={confirmarSenha}
                 onChange={(e) => setConfirmarSenha(e.target.value)}
                 placeholder="Confirmar nova senha"
-                className="w-full bg-[#12100E] border border-[#2A2622] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
+                className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D97757]"
               />
               {erro && <p className="text-xs text-red-400">{erro}</p>}
               <button
                 type="submit"
                 disabled={status === "enviando"}
-                className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-md hover:bg-[#e5896d] transition disabled:opacity-60"
+                className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
               >
                 {status === "enviando" ? "Salvando..." : "Salvar nova senha"}
               </button>
