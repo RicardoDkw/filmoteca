@@ -18,6 +18,8 @@ import {
   BarChart,
   Globe,
   Bell,
+  Camera,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
@@ -26,6 +28,7 @@ import RatingInput, { notaEhValida } from "@/components/RatingInput";
 import ComentariosFilmeModal from "@/components/ComentariosFilmeModal";
 import NotificacoesModal from "@/components/NotificacoesModal";
 import AvaliarModal from "@/components/AvaliarModal";
+import PostarModal from "@/components/PostarModal";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
 import ToastConquistas from "@/components/ToastConquistas";
@@ -33,6 +36,7 @@ import EscolherNick from "@/components/EscolherNick";
 import PerfilModal from "@/components/PerfilModal";
 import { GENEROS_TMDB } from "@/lib/genres";
 import { BADGES, calcularDesbloqueadas } from "@/lib/badges";
+import { formatarTempoRelativo } from "@/lib/tempo";
 
 const CORES_CONFETE = ["#D97757", "#E5896D", "#F1EEE6"];
 
@@ -40,6 +44,7 @@ const ABAS = [
   { key: "assistido", label: "Assistidos", Icon: Check },
   { key: "quero", label: "Quero ver", Icon: Bookmark },
   { key: "descobrir", label: "Descobrir", Icon: Compass },
+  { key: "feed", label: "Feed", Icon: Camera },
   { key: "estatisticas", label: "Estatísticas", Icon: BarChart },
   { key: "amigos", label: "Amigos", Icon: Users },
 ];
@@ -158,6 +163,11 @@ export default function Filmoteca() {
   const [comentarioFilmeVisivel, setComentarioFilmeVisivel] = useState(false);
   const [avaliarModalAberto, setAvaliarModalAberto] = useState(null);
   const [avaliarModalVisivel, setAvaliarModalVisivel] = useState(false);
+  const [posts, setPosts] = useState([]);
+  const [carregandoPosts, setCarregandoPosts] = useState(false);
+  const [postarModalAberto, setPostarModalAberto] = useState(false);
+  const [postarModalVisivel, setPostarModalVisivel] = useState(false);
+  const [apagandoPost, setApagandoPost] = useState(null);
   const [notificacaoModalAberto, setNotificacaoModalAberto] = useState(false);
   const [notificacaoModalVisivel, setNotificacaoModalVisivel] = useState(false);
   const [contagemNaoLidas, setContagemNaoLidas] = useState(0);
@@ -343,6 +353,27 @@ export default function Filmoteca() {
       ativo = false;
     };
   }, [session]);
+
+  // carrega o feed (próprios posts + de quem segue) ao abrir a aba
+  useEffect(() => {
+    async function carregarPosts() {
+      if (aba !== "feed" || !session) return;
+      setCarregandoPosts(true);
+      const ids = [session.user.id, ...seguindo.map((s) => s.seguido_id)];
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*")
+        .in("autor_id", ids)
+        .order("created_at", { ascending: false });
+      setCarregandoPosts(false);
+      if (error) {
+        console.error("Erro ao carregar posts:", error);
+        return;
+      }
+      setPosts(data || []);
+    }
+    carregarPosts();
+  }, [aba, seguindo, session]);
 
   async function seguirUsuario() {
     if (buscandoAmigo) return;
@@ -760,6 +791,52 @@ export default function Filmoteca() {
   function fecharAvaliarModal() {
     setAvaliarModalVisivel(false);
     setTimeout(() => setAvaliarModalAberto(null), 250);
+  }
+
+  function abrirPostarModal() {
+    setPostarModalAberto(true);
+    requestAnimationFrame(() => setPostarModalVisivel(true));
+  }
+
+  function fecharPostarModal() {
+    setPostarModalVisivel(false);
+    setTimeout(() => setPostarModalAberto(false), 250);
+  }
+
+  function handlePostado(novoPost) {
+    setPosts((atual) => [novoPost, ...atual]);
+    fecharPostarModal();
+  }
+
+  function resolverAutorPost(autorId) {
+    if (autorId === session.user.id) return perfilProprio;
+    return perfisPorId[autorId] || null;
+  }
+
+  function extrairCaminhoStorage(url) {
+    const marcador = "/object/public/posts/";
+    const idx = url.indexOf(marcador);
+    if (idx === -1) return null;
+    return url.slice(idx + marcador.length);
+  }
+
+  async function apagarPost(post) {
+    if (apagandoPost) return;
+    if (!window.confirm("Excluir esta publicação?")) return;
+    setApagandoPost(post.id);
+    const caminho = extrairCaminhoStorage(post.imagem_url);
+    if (caminho) {
+      const { error: erroStorage } = await supabase.storage.from("posts").remove([caminho]);
+      if (erroStorage) console.error("Erro ao remover arquivo do post:", erroStorage);
+    }
+    const { error } = await supabase.from("posts").delete().eq("id", post.id);
+    setApagandoPost(null);
+    if (error) {
+      console.error("Erro ao apagar post:", error);
+      alert("Não foi possível apagar a publicação. Tente novamente.");
+      return;
+    }
+    setPosts((atual) => atual.filter((p) => p.id !== post.id));
   }
 
   function handleVerComentariosProprio(filme) {
@@ -1259,6 +1336,90 @@ export default function Filmoteca() {
                 )
               )}
             </div>
+          ) : aba === "feed" ? (
+            <div>
+              <SectionTitle icon={Camera}>Feed</SectionTitle>
+
+              <button
+                onClick={abrirPostarModal}
+                className="w-full mb-4 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition"
+              >
+                <Camera className="w-4 h-4" />
+                Postar foto
+              </button>
+
+              {carregandoPosts ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 2 }, (_, i) => (
+                    <div
+                      key={i}
+                      className="bg-[#1B1815] rounded-lg border border-[#2A2622] overflow-hidden"
+                    >
+                      <div className="w-full aspect-square bg-[#2A2622] animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              ) : posts.length === 0 ? (
+                <p className="text-[#8A857C] text-center py-16 text-sm">
+                  Nenhuma publicação ainda. Siga amigos ou publique algo!
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {posts.map((post) => {
+                    const autor = resolverAutorPost(post.autor_id);
+                    const podeApagar = post.autor_id === session.user.id;
+                    return (
+                      <div
+                        key={post.id}
+                        className="bg-[#1B1815] rounded-lg border border-[#2A2622] shadow-lg shadow-black/30 overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-8 h-8 rounded-full overflow-hidden bg-[#12100E] border border-[#2A2622] flex items-center justify-center shrink-0">
+                              {autor?.avatar_url ? (
+                                <img
+                                  src={autor.avatar_url}
+                                  alt={autor.nick}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="w-4 h-4 text-[#8A857C]" />
+                              )}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {autor?.nome || autor?.nick || "..."}
+                              </p>
+                              <p className="text-[10px] text-[#8A857C]">
+                                {formatarTempoRelativo(post.created_at)}
+                              </p>
+                            </div>
+                          </div>
+                          {podeApagar && (
+                            <button
+                              onClick={() => apagarPost(post)}
+                              disabled={apagandoPost === post.id}
+                              aria-label="Excluir publicação"
+                              className="text-[#8A857C] hover:text-red-400 transition disabled:opacity-60 shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        <img
+                          src={post.imagem_url}
+                          alt="Publicação"
+                          className="w-full aspect-square object-cover"
+                        />
+                        {post.legenda && (
+                          <p className="text-sm p-3 break-words">{post.legenda}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ) : aba === "amigos" ? (
             amigoSelecionado !== null ? (
               <div>
@@ -1640,6 +1801,15 @@ export default function Filmoteca() {
           visivel={avaliarModalVisivel}
           onClose={fecharAvaliarModal}
           onAvaliar={avaliar}
+        />
+      )}
+
+      {postarModalAberto && (
+        <PostarModal
+          visivel={postarModalVisivel}
+          onClose={fecharPostarModal}
+          sessionUserId={session.user.id}
+          onPostado={handlePostado}
         />
       )}
 
