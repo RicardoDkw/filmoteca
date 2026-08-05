@@ -1,7 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Star, Plus, X, Film, LogOut, Lock, Users, ArrowLeft, User } from "lucide-react";
+import {
+  Search,
+  Star,
+  Plus,
+  X,
+  Film,
+  LogOut,
+  Lock,
+  Users,
+  ArrowLeft,
+  User,
+  Check,
+  Bookmark,
+  Compass,
+  BarChart,
+} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import AuthScreen from "@/components/AuthScreen";
 import DetailsModal from "@/components/DetailsModal";
@@ -14,6 +29,14 @@ import { GENEROS_TMDB } from "@/lib/genres";
 import { BADGES, calcularDesbloqueadas } from "@/lib/badges";
 
 const CORES_CONFETE = ["#D97757", "#E5896D", "#F1EEE6"];
+
+const ABAS = [
+  { key: "assistido", label: "Assistidos", Icon: Check },
+  { key: "quero", label: "Quero ver", Icon: Bookmark },
+  { key: "descobrir", label: "Descobrir", Icon: Compass },
+  { key: "estatisticas", label: "Estatísticas", Icon: BarChart },
+  { key: "amigos", label: "Amigos", Icon: Users },
+];
 
 function Confete({ onFim }) {
   const [pecas] = useState(() =>
@@ -797,7 +820,7 @@ export default function Filmoteca() {
 
   return (
     <div className="min-h-screen bg-[#12100E] text-[#F1EEE6] p-6">
-      <div className="max-w-md mx-auto pb-20">
+      <div className="max-w-md mx-auto pb-24 sm:pb-20">
         <header className="flex items-center justify-between gap-2 mb-5 pt-1">
           <div className="flex items-center gap-2">
             <Film className="w-5 h-5 text-[#D97757]" />
@@ -829,14 +852,8 @@ export default function Filmoteca() {
           </div>
         </header>
 
-        <div className="flex gap-1 mb-5 bg-[#1B1815] rounded-lg p-1 border border-[#2A2622]">
-          {[
-            { key: "assistido", label: "Assistidos" },
-            { key: "quero", label: "Quero ver" },
-            { key: "descobrir", label: "Descobrir" },
-            { key: "estatisticas", label: "Estatísticas" },
-            { key: "amigos", label: "Amigos" },
-          ].map((t) => (
+        <div className="hidden sm:flex gap-1 mb-5 bg-[#1B1815] rounded-lg p-1 border border-[#2A2622]">
+          {ABAS.map((t) => (
             <button
               key={t.key}
               onClick={() => setAba(t.key)}
@@ -1263,12 +1280,31 @@ export default function Filmoteca() {
 
         <button
           onClick={abrirModalAdicionar}
-          className="fixed bottom-6 right-6 bg-[#D97757] text-[#12100E] rounded-full w-14 h-14 flex items-center justify-center shadow-lg active:scale-95 transition"
+          className="fixed bottom-24 sm:bottom-6 right-6 bg-[#D97757] text-[#12100E] rounded-full w-14 h-14 flex items-center justify-center shadow-lg active:scale-95 transition z-40"
           aria-label="Adicionar filme"
         >
           <Plus className="w-6 h-6" />
         </button>
       </div>
+
+      <nav className="hidden max-sm:flex fixed inset-x-0 bottom-0 w-full z-40 bg-[#1B1815] border-t border-[#2A2622] pb-[env(safe-area-inset-bottom)]">
+        {ABAS.map((t) => {
+          const Icon = t.Icon;
+          const ativo = aba === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setAba(t.key)}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition ${
+                ativo ? "text-[#D97757]" : "text-[#8A857C]"
+              }`}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="text-[10px]">{t.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {modalAberto && (
         <div
