@@ -4,10 +4,8 @@ import { useState } from "react";
 import { Camera, X } from "lucide-react";
 import { redimensionarImagem } from "@/lib/imagem";
 
-const SIMILARIDADE_CONFIANTE = 0.85;
-
 // remove sufixos comuns de temporada/parte (ex: "Final Season Part 2", "2nd Season",
-// "Cour 2") que o AniList inclui no título mas o TMDb geralmente não cataloga —
+// "Cour 2") que a IA às vezes inclui no título mas o TMDb geralmente não cataloga —
 // aplica em loop porque alguns títulos empilham mais de um sufixo
 const SUFIXOS_TEMPORADA = [
   /[\s:–-]+(the\s+)?final\s+season(\s+part\s*\d+)?\s*$/i,
@@ -48,6 +46,12 @@ function blobParaBase64(blob) {
   });
 }
 
+const TEXTO_CONFIANCA = {
+  alta: { rotulo: "Encontramos:", cor: "text-[#F1EEE6]" },
+  media: { rotulo: "Achamos que pode ser:", cor: "text-[#D97757]" },
+  baixa: { rotulo: "Não temos certeza, mas talvez seja:", cor: "text-[#D97757]" },
+};
+
 export default function IdentificarModal({ visivel, onClose, onIdentificado }) {
   const [preview, setPreview] = useState("");
   const [identificando, setIdentificando] = useState(false);
@@ -73,49 +77,15 @@ export default function IdentificarModal({ visivel, onClose, onIdentificado }) {
     setIdentificando(true);
     try {
       const blob = await redimensionarImagem(file, 800);
-
-      // 1ª tentativa: trace.moe (rápido, gratuito, especializado em anime)
-      const formData = new FormData();
-      formData.append("image", blob, "cena.jpg");
-      const resTrace = await fetch("/api/identificar-anime", { method: "POST", body: formData });
-      const dataTrace = await resTrace.json();
-      if (!resTrace.ok) throw new Error(dataTrace.error || "Não foi possível identificar a cena.");
-
-      if (dataTrace.encontrado && dataTrace.similaridade >= SIMILARIDADE_CONFIANTE) {
-        setResultado({
-          encontrado: true,
-          titulo: dataTrace.titulo,
-          similaridade: dataTrace.similaridade,
-          fonte: "trace",
-        });
-        setIdentificando(false);
-        return;
-      }
-
-      // trace.moe não achou com confiança (ou a cena nem é de anime): reforça com IA de visão
       const base64 = await blobParaBase64(blob);
-      const resIa = await fetch("/api/identificar-com-ia", {
+      const res = await fetch("/api/identificar-com-ia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imagemBase64: base64, mediaType: "image/jpeg" }),
       });
-      const dataIa = await resIa.json();
-      if (!resIa.ok) throw new Error(dataIa.error || "Não foi possível identificar a cena.");
-
-      if (dataIa.encontrado) {
-        setResultado({ encontrado: true, titulo: dataIa.titulo, fonte: "ia" });
-      } else if (dataTrace.encontrado) {
-        // IA também não confirmou nada: melhor mostrar o palpite de baixa confiança
-        // do trace.moe do que nada
-        setResultado({
-          encontrado: true,
-          titulo: dataTrace.titulo,
-          similaridade: dataTrace.similaridade,
-          fonte: "trace",
-        });
-      } else {
-        setResultado({ encontrado: false });
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível identificar a cena.");
+      setResultado(data);
     } catch (err) {
       console.error("Erro ao identificar cena:", err);
       setErro(err.message || "Não foi possível identificar a cena. Tente novamente.");
@@ -140,6 +110,10 @@ export default function IdentificarModal({ visivel, onClose, onIdentificado }) {
     onClose();
     onIdentificado(tituloBusca);
   }
+
+  const infoConfianca = resultado?.encontrado
+    ? TEXTO_CONFIANCA[resultado.confianca] || TEXTO_CONFIANCA.baixa
+    : null;
 
   return (
     <div
@@ -224,28 +198,13 @@ export default function IdentificarModal({ visivel, onClose, onIdentificado }) {
 
             {resultado?.encontrado && (
               <div>
-                {resultado.fonte === "trace" ? (
-                  resultado.similaridade < SIMILARIDADE_CONFIANTE ? (
-                    <p className="text-sm text-[#D97757] mb-1">
-                      Não tenho certeza, mas pode ser:{" "}
-                      <span className="font-medium">{resultado.titulo}</span>
-                    </p>
-                  ) : (
-                    <p className="text-sm mb-1">
-                      Encontramos:{" "}
-                      <span className="font-medium text-[#D97757]">{resultado.titulo}</span>
-                    </p>
-                  )
-                ) : (
-                  <p className="text-sm mb-1">
-                    Identificamos:{" "}
-                    <span className="font-medium text-[#D97757]">{resultado.titulo}</span>
-                  </p>
-                )}
+                <p className={`text-sm mb-1 ${infoConfianca.cor}`}>
+                  {infoConfianca.rotulo}{" "}
+                  <span className="font-medium text-[#D97757]">{resultado.titulo}</span>
+                </p>
                 <p className="text-[10px] text-[#8A857C] mb-4">
-                  {resultado.fonte === "trace"
-                    ? `${Math.round(resultado.similaridade * 100)}% de similaridade`
-                    : "identificado com IA"}
+                  Identificado com IA · confiança{" "}
+                  {resultado.confianca === "media" ? "média" : resultado.confianca}
                 </p>
                 <div className="flex gap-2">
                   <button
