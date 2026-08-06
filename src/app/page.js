@@ -151,6 +151,10 @@ export default function Filmoteca() {
   const [buscandoAmigo, setBuscandoAmigo] = useState(false);
   const [erroBuscaAmigo, setErroBuscaAmigo] = useState("");
   const [seguindo, setSeguindo] = useState([]);
+  const [subAbaAmigos, setSubAbaAmigos] = useState("seguindo");
+  const [seguidores, setSeguidores] = useState([]);
+  const [carregandoSeguidores, setCarregandoSeguidores] = useState(false);
+  const [seguindoDeVolta, setSeguindoDeVolta] = useState(null);
   const [amigoSelecionado, setAmigoSelecionado] = useState(null);
   const [assistidosDoAmigo, setAssistidosDoAmigo] = useState({});
   const [carregandoAssistidosAmigo, setCarregandoAssistidosAmigo] = useState(false);
@@ -368,6 +372,49 @@ export default function Filmoteca() {
     };
   }, [session]);
 
+  // carrega quem segue o usuário (lado oposto de "seguindo") e resolve os perfis em lote
+  useEffect(() => {
+    if (!session) {
+      const limpar = setTimeout(() => setSeguidores([]), 0);
+      return () => clearTimeout(limpar);
+    }
+    let ativo = true;
+    (async () => {
+      setCarregandoSeguidores(true);
+      const { data, error } = await supabase
+        .from("seguidores")
+        .select("*")
+        .eq("seguido_id", session.user.id);
+      if (!ativo) return;
+      setCarregandoSeguidores(false);
+      if (error) {
+        console.error("Erro ao carregar seguidores:", error);
+        return;
+      }
+      setSeguidores(data || []);
+      const ids = (data || []).map((s) => s.seguidor_id).filter((id) => !perfisPorId[id]);
+      if (ids.length === 0) return;
+      const { data: perfisData, error: erroPerfis } = await supabase
+        .from("perfis")
+        .select("user_id, nick, nome, avatar_url")
+        .in("user_id", ids);
+      if (!ativo) return;
+      if (erroPerfis) {
+        console.error("Erro ao carregar perfis dos seguidores:", erroPerfis);
+        return;
+      }
+      setPerfisPorId((atual) => {
+        const novo = { ...atual };
+        for (const p of perfisData || []) novo[p.user_id] = p;
+        return novo;
+      });
+    })();
+    return () => {
+      ativo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
   // carrega o feed (próprios posts + de quem segue) ao abrir a aba, junto com
   // curtidas e contagem de comentários de todos os posts visíveis em lote (não por post)
   useEffect(() => {
@@ -531,6 +578,26 @@ export default function Filmoteca() {
     }
     setSeguindo((atual) => atual.filter((s) => s.seguido_id !== id));
     if (amigoSelecionado === id) setAmigoSelecionado(null);
+  }
+
+  async function seguirDeVolta(id) {
+    if (seguindoDeVolta) return;
+    setSeguindoDeVolta(id);
+    const { data, error } = await supabase
+      .from("seguidores")
+      .insert({ seguidor_id: session.user.id, seguido_id: id })
+      .select()
+      .single();
+    setSeguindoDeVolta(null);
+    if (error) {
+      if (error.code !== "23505") {
+        console.error("Erro ao seguir de volta:", error);
+        alert("Não foi possível seguir essa pessoa. Tente novamente.");
+        return;
+      }
+    } else {
+      setSeguindo((atual) => [...atual, data]);
+    }
   }
 
   function abrirAmigo(id) {
@@ -1888,50 +1955,128 @@ export default function Filmoteca() {
                   <p className="text-xs text-red-400 mb-3">{erroBuscaAmigo}</p>
                 )}
 
-                <p className="text-xs font-semibold text-[#8A857C] mb-3 mt-6 uppercase tracking-wider">
-                  Seguindo
-                </p>
-                {seguindo.length === 0 ? (
+                <div className="flex gap-2 mb-4 mt-6">
+                  <button
+                    onClick={() => setSubAbaAmigos("seguindo")}
+                    className={`flex-1 text-sm font-medium py-2 rounded-lg transition ${
+                      subAbaAmigos === "seguindo"
+                        ? "bg-[#D97757] text-[#12100E]"
+                        : "bg-[#1B1815] border border-[#2A2622] text-[#8A857C] hover:text-[#F1EEE6]"
+                    }`}
+                  >
+                    Seguindo ({seguindo.length})
+                  </button>
+                  <button
+                    onClick={() => setSubAbaAmigos("seguidores")}
+                    className={`flex-1 text-sm font-medium py-2 rounded-lg transition ${
+                      subAbaAmigos === "seguidores"
+                        ? "bg-[#D97757] text-[#12100E]"
+                        : "bg-[#1B1815] border border-[#2A2622] text-[#8A857C] hover:text-[#F1EEE6]"
+                    }`}
+                  >
+                    Seguidores ({seguidores.length})
+                  </button>
+                </div>
+
+                {subAbaAmigos === "seguindo" ? (
+                  seguindo.length === 0 ? (
+                    <div className="flex flex-col items-center py-16 text-center">
+                      <Users className="w-8 h-8 text-[#8A857C] mb-2" />
+                      <p className="text-[#8A857C] text-sm">Você ainda não segue ninguém.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {seguindo.map((s) => {
+                        const perfil = perfisPorId[s.seguido_id];
+                        return (
+                        <div
+                          key={s.seguido_id}
+                          className="flex items-center justify-between bg-[#1B1815] border border-[#2A2622] rounded-lg p-3"
+                        >
+                          <button
+                            onClick={() => abrirAmigo(s.seguido_id)}
+                            className="flex items-center gap-2 text-sm text-left flex-1 hover:text-[#D97757] transition truncate min-w-0"
+                          >
+                            <span className="w-7 h-7 rounded-full overflow-hidden bg-[#12100E] border border-[#2A2622] flex items-center justify-center shrink-0">
+                              {perfil?.avatar_url ? (
+                                <img
+                                  src={perfil.avatar_url}
+                                  alt={perfil.nick}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="w-3.5 h-3.5 text-[#8A857C]" />
+                              )}
+                            </span>
+                            <span className="truncate">
+                              {perfil ? perfil.nome || perfil.nick : "Carregando..."}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => deixarDeSeguir(s.seguido_id)}
+                            disabled={deixandoDeSeguir === s.seguido_id}
+                            className="text-xs text-[#8A857C] hover:text-[#F1EEE6] transition disabled:opacity-60 shrink-0 ml-2"
+                          >
+                            {deixandoDeSeguir === s.seguido_id ? "Removendo..." : "Deixar de seguir"}
+                          </button>
+                        </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : carregandoSeguidores ? (
+                  <div className="flex items-center gap-2 py-4 justify-center">
+                    <div className="w-4 h-4 border-2 border-[#2A2622] border-t-[#D97757] rounded-full animate-spin" />
+                    <span className="text-xs text-[#8A857C]">Carregando...</span>
+                  </div>
+                ) : seguidores.length === 0 ? (
                   <div className="flex flex-col items-center py-16 text-center">
                     <Users className="w-8 h-8 text-[#8A857C] mb-2" />
-                    <p className="text-[#8A857C] text-sm">Você ainda não segue ninguém.</p>
+                    <p className="text-[#8A857C] text-sm">Ninguém te segue ainda.</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {seguindo.map((s) => {
-                      const perfil = perfisPorId[s.seguido_id];
+                    {seguidores.map((s) => {
+                      const perfil = perfisPorId[s.seguidor_id];
+                      const jaSigo = seguindo.some((f) => f.seguido_id === s.seguidor_id);
                       return (
-                      <div
-                        key={s.seguido_id}
-                        className="flex items-center justify-between bg-[#1B1815] border border-[#2A2622] rounded-lg p-3"
-                      >
-                        <button
-                          onClick={() => abrirAmigo(s.seguido_id)}
-                          className="flex items-center gap-2 text-sm text-left flex-1 hover:text-[#D97757] transition truncate min-w-0"
+                        <div
+                          key={s.seguidor_id}
+                          className="flex items-center justify-between bg-[#1B1815] border border-[#2A2622] rounded-lg p-3"
                         >
-                          <span className="w-7 h-7 rounded-full overflow-hidden bg-[#12100E] border border-[#2A2622] flex items-center justify-center shrink-0">
-                            {perfil?.avatar_url ? (
-                              <img
-                                src={perfil.avatar_url}
-                                alt={perfil.nick}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <User className="w-3.5 h-3.5 text-[#8A857C]" />
-                            )}
-                          </span>
-                          <span className="truncate">
-                            {perfil ? perfil.nome || perfil.nick : "Carregando..."}
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => deixarDeSeguir(s.seguido_id)}
-                          disabled={deixandoDeSeguir === s.seguido_id}
-                          className="text-xs text-[#8A857C] hover:text-[#F1EEE6] transition disabled:opacity-60 shrink-0 ml-2"
-                        >
-                          {deixandoDeSeguir === s.seguido_id ? "Removendo..." : "Deixar de seguir"}
-                        </button>
-                      </div>
+                          <button
+                            onClick={() => abrirAmigo(s.seguidor_id)}
+                            className="flex items-center gap-2 text-sm text-left flex-1 hover:text-[#D97757] transition truncate min-w-0"
+                          >
+                            <span className="w-7 h-7 rounded-full overflow-hidden bg-[#12100E] border border-[#2A2622] flex items-center justify-center shrink-0">
+                              {perfil?.avatar_url ? (
+                                <img
+                                  src={perfil.avatar_url}
+                                  alt={perfil.nick}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="w-3.5 h-3.5 text-[#8A857C]" />
+                              )}
+                            </span>
+                            <span className="truncate">
+                              {perfil ? perfil.nome || perfil.nick : "Carregando..."}
+                            </span>
+                          </button>
+                          {jaSigo ? (
+                            <span className="text-xs text-[#8A857C] shrink-0 ml-2">
+                              Você já segue
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => seguirDeVolta(s.seguidor_id)}
+                              disabled={seguindoDeVolta === s.seguidor_id}
+                              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-[#D97757] text-[#12100E] hover:bg-[#e5896d] transition disabled:opacity-60 shrink-0 ml-2"
+                            >
+                              {seguindoDeVolta === s.seguidor_id ? "Seguindo..." : "Seguir de volta"}
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
