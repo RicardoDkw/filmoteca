@@ -128,9 +128,14 @@ export default function IdentificarModal({ visivel, onClose, onIdentificado }) {
             : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
         }`}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Identificar Filme/Série/Anime</h2>
-          <button onClick={fechar} disabled={identificando}>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-bold">Identificar Filme/Série/Anime</h2>
+            <p className="text-xs text-[#8A857C] mt-0.5">
+              Funciona melhor com cenas marcantes e reconhecíveis
+            </p>
+          </div>
+          <button onClick={fechar} disabled={identificando} className="shrink-0 ml-3">
             <X className="w-4 h-4 text-[#8A857C]" />
           </button>
         </div>
@@ -182,10 +187,12 @@ export default function IdentificarModal({ visivel, onClose, onIdentificado }) {
             {resultado && !resultado.encontrado && (
               <div className="text-center py-2">
                 <p className="text-sm text-[#F1EEE6] mb-1">
-                  Não conseguimos identificar essa cena.
+                  Não conseguimos identificar essa cena com certeza.
                 </p>
                 <p className="text-xs text-[#8A857C] mb-4">
-                  Tente uma imagem mais nítida, de preferência sem legendas ou bordas.
+                  Isso costuma acontecer com cenas menos icônicas ou imagens de baixa
+                  qualidade. Dica: funciona melhor com cenas marcantes, rostos visíveis de
+                  personagens/atores, ou cenários reconhecíveis.
                 </p>
                 <button
                   onClick={limpar}
