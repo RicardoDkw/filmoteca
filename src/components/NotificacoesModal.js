@@ -5,7 +5,13 @@ import { Bell, User, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { formatarTempoRelativo } from "@/lib/tempo";
 
-export default function NotificacoesModal({ visivel, onClose, sessionUserId, onAbrirFilme }) {
+export default function NotificacoesModal({
+  visivel,
+  onClose,
+  sessionUserId,
+  onAbrirFilme,
+  onIrParaFeed,
+}) {
   const [notificacoes, setNotificacoes] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [perfisAutores, setPerfisAutores] = useState({});
@@ -76,7 +82,11 @@ export default function NotificacoesModal({ visivel, onClose, sessionUserId, onA
       marcarComoLida(n.id);
     }
     onClose();
-    onAbrirFilme(n.filme_id, n.destinatario_id);
+    if (n.tipo === "marcacao_post") {
+      onIrParaFeed();
+    } else {
+      onAbrirFilme(n.filme_id, n.destinatario_id);
+    }
   }
 
   const temNaoLidas = notificacoes.some((n) => !n.lida);
@@ -147,7 +157,13 @@ export default function NotificacoesModal({ visivel, onClose, sessionUserId, onA
                   <div className="flex-1 min-w-0">
                     <p className="text-sm">
                       <span className="font-medium">{autor?.nome || autor?.nick || "Alguém"}</span>{" "}
-                      comentou em <span className="font-medium">{n.filme_titulo}</span>
+                      {n.tipo === "marcacao_post" ? (
+                        "marcou você em uma publicação"
+                      ) : (
+                        <>
+                          comentou em <span className="font-medium">{n.filme_titulo}</span>
+                        </>
+                      )}
                     </p>
                     <p className="text-[10px] text-[#8A857C] mt-1">
                       {formatarTempoRelativo(n.created_at)}

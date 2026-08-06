@@ -5,12 +5,16 @@ import { Camera, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { redimensionarImagem } from "@/lib/imagem";
 
-export default function PostarModal({ visivel, onClose, sessionUserId, onPostado }) {
+export default function PostarModal({ visivel, onClose, sessionUserId, accessToken, onPostado }) {
   const [arquivo, setArquivo] = useState(null);
   const [preview, setPreview] = useState("");
   const [legenda, setLegenda] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
+  const [buscaNickMarcar, setBuscaNickMarcar] = useState("");
+  const [buscandoMarcar, setBuscandoMarcar] = useState(false);
+  const [erroBuscaMarcar, setErroBuscaMarcar] = useState("");
+  const [marcados, setMarcados] = useState([]);
 
   function handleArquivo(e) {
     const file = e.target.files?.[0];
@@ -28,7 +32,57 @@ export default function PostarModal({ visivel, onClose, sessionUserId, onPostado
     setPreview("");
     setLegenda("");
     setErro("");
+    setBuscaNickMarcar("");
+    setErroBuscaMarcar("");
+    setMarcados([]);
     onClose();
+  }
+
+  async function adicionarMarcado() {
+    if (buscandoMarcar) return;
+    const nick = buscaNickMarcar.trim();
+    if (!nick) {
+      setErroBuscaMarcar("Informe um nick.");
+      return;
+    }
+    setErroBuscaMarcar("");
+    setBuscandoMarcar(true);
+    const res = await fetch("/api/buscar-por-nick", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ nick }),
+    });
+    const data = await res.json();
+    setBuscandoMarcar(false);
+    if (!res.ok) {
+      if (res.status === 404) {
+        setErroBuscaMarcar("Usuário não encontrado.");
+      } else if (res.status === 401) {
+        setErroBuscaMarcar("Sua sessão expirou. Atualize a página e faça login novamente.");
+      } else {
+        console.error("Erro ao buscar por nick:", res.status, data);
+        setErroBuscaMarcar("Não foi possível buscar o usuário. Tente novamente.");
+      }
+      return;
+    }
+    const perfilEncontrado = data.perfil;
+    if (perfilEncontrado.user_id === sessionUserId) {
+      setErroBuscaMarcar("Você não pode se marcar.");
+      return;
+    }
+    if (marcados.some((m) => m.user_id === perfilEncontrado.user_id)) {
+      setErroBuscaMarcar("Essa pessoa já foi marcada.");
+      return;
+    }
+    setMarcados((atual) => [...atual, perfilEncontrado]);
+    setBuscaNickMarcar("");
+  }
+
+  function removerMarcado(userId) {
+    setMarcados((atual) => atual.filter((m) => m.user_id !== userId));
   }
 
   async function postar() {
@@ -53,11 +107,36 @@ export default function PostarModal({ visivel, onClose, sessionUserId, onPostado
         .select()
         .single();
       if (error) throw error;
+
+      if (marcados.length > 0) {
+        const { error: erroMarcacoes } = await supabase
+          .from("marcacoes_post")
+          .insert(marcados.map((m) => ({ post_id: data.id, usuario_id: m.user_id })));
+        if (erroMarcacoes) {
+          console.error("Erro ao marcar pessoas no post:", erroMarcacoes);
+        } else {
+          const { error: erroNotificacoes } = await supabase.from("notificacoes").insert(
+            marcados.map((m) => ({
+              destinatario_id: m.user_id,
+              autor_id: sessionUserId,
+              tipo: "marcacao_post",
+              post_id: data.id,
+            }))
+          );
+          if (erroNotificacoes) {
+            console.error("Erro ao criar notificações de marcação:", erroNotificacoes);
+          }
+        }
+      }
+
+      const marcadosPublicados = marcados;
       if (preview) URL.revokeObjectURL(preview);
       setArquivo(null);
       setPreview("");
       setLegenda("");
-      onPostado(data);
+      setBuscaNickMarcar("");
+      setMarcados([]);
+      onPostado(data, marcadosPublicados);
     } catch (err) {
       console.error("Erro ao publicar post:", err);
       setErro("Não foi possível publicar. Tente novamente.");
@@ -119,12 +198,56 @@ export default function PostarModal({ visivel, onClose, sessionUserId, onPostado
           className="w-full bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 mt-1 mb-4 text-sm focus:outline-none focus:border-[#D97757] resize-none disabled:opacity-60"
         />
 
-        {erro && <p className="text-xs text-red-400 mb-3">{erro}</p>}
+        <label className="text-xs text-[#8A857C]">Marcar pessoas (opcional)</label>
+        <div className="flex gap-2 mt-1">
+          <input
+            type="text"
+            value={buscaNickMarcar}
+            onChange={(e) => setBuscaNickMarcar(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") adicionarMarcado();
+            }}
+            disabled={enviando}
+            placeholder="Nick da pessoa"
+            className="flex-1 bg-[#12100E] border border-[#2A2622] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D97757] disabled:opacity-60"
+          />
+          <button
+            onClick={adicionarMarcado}
+            disabled={buscandoMarcar || enviando}
+            className="px-4 text-sm font-medium rounded-lg bg-[#2A2622] text-[#F1EEE6] hover:bg-[#3A352E] transition disabled:opacity-60"
+          >
+            {buscandoMarcar ? "Buscando..." : "Adicionar"}
+          </button>
+        </div>
+        {erroBuscaMarcar && <p className="text-xs text-red-400 mt-1.5">{erroBuscaMarcar}</p>}
+
+        {marcados.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {marcados.map((m) => (
+              <span
+                key={m.user_id}
+                className="flex items-center gap-1 bg-[#12100E] border border-[#2A2622] rounded-full pl-2.5 pr-1.5 py-1 text-xs"
+              >
+                @{m.nick}
+                <button
+                  onClick={() => removerMarcado(m.user_id)}
+                  disabled={enviando}
+                  aria-label={`Remover marcação de ${m.nick}`}
+                  className="text-[#8A857C] hover:text-red-400 transition disabled:opacity-60"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {erro && <p className="text-xs text-red-400 mt-3 mb-3">{erro}</p>}
 
         <button
           onClick={postar}
           disabled={enviando || !arquivo}
-          className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60"
+          className="w-full bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition disabled:opacity-60 mt-4"
         >
           {enviando ? "Publicando..." : "Postar"}
         </button>

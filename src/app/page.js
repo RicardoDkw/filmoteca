@@ -173,6 +173,8 @@ export default function Filmoteca() {
   const [curtidoPorMim, setCurtidoPorMim] = useState({});
   const [curtindoPost, setCurtindoPost] = useState(null);
   const [comentariosContagemPorPost, setComentariosContagemPorPost] = useState({});
+  const [marcacoesPorPost, setMarcacoesPorPost] = useState({});
+  const [perfisMarcados, setPerfisMarcados] = useState({});
   const [postComentariosAberto, setPostComentariosAberto] = useState(null);
   const [comentariosPorPost, setComentariosPorPost] = useState({});
   const [carregandoComentariosPost, setCarregandoComentariosPost] = useState(null);
@@ -391,11 +393,13 @@ export default function Filmoteca() {
         setCurtidasPorPost({});
         setCurtidoPorMim({});
         setComentariosContagemPorPost({});
+        setMarcacoesPorPost({});
         return;
       }
-      const [curtidasRes, comentariosRes] = await Promise.all([
+      const [curtidasRes, comentariosRes, marcacoesRes] = await Promise.all([
         supabase.from("curtidas_post").select("post_id, usuario_id").in("post_id", postIds),
         supabase.from("comentarios_post").select("post_id").in("post_id", postIds),
+        supabase.from("marcacoes_post").select("post_id, usuario_id").in("post_id", postIds),
       ]);
       setCarregandoPosts(false);
       if (curtidasRes.error) {
@@ -418,6 +422,38 @@ export default function Filmoteca() {
           contagem[r.post_id] = (contagem[r.post_id] || 0) + 1;
         }
         setComentariosContagemPorPost(contagem);
+      }
+      if (marcacoesRes.error) {
+        console.error("Erro ao carregar marcações dos posts:", marcacoesRes.error);
+      } else {
+        const porPost = {};
+        for (const r of marcacoesRes.data || []) {
+          if (!porPost[r.post_id]) porPost[r.post_id] = [];
+          porPost[r.post_id].push(r.usuario_id);
+        }
+        setMarcacoesPorPost(porPost);
+        const idsFaltando = [
+          ...new Set(
+            (marcacoesRes.data || [])
+              .map((r) => r.usuario_id)
+              .filter((id) => id !== session.user.id && !perfisPorId[id])
+          ),
+        ];
+        if (idsFaltando.length > 0) {
+          const { data: perfisData, error: erroPerfis } = await supabase
+            .from("perfis")
+            .select("user_id, nick, nome, avatar_url")
+            .in("user_id", idsFaltando);
+          if (erroPerfis) {
+            console.error("Erro ao carregar perfis das pessoas marcadas:", erroPerfis);
+          } else {
+            setPerfisMarcados((atual) => {
+              const novo = { ...atual };
+              for (const p of perfisData || []) novo[p.user_id] = p;
+              return novo;
+            });
+          }
+        }
       }
     }
     carregarPosts();
@@ -851,14 +887,30 @@ export default function Filmoteca() {
     setTimeout(() => setPostarModalAberto(false), 250);
   }
 
-  function handlePostado(novoPost) {
+  function handlePostado(novoPost, marcados) {
     setPosts((atual) => [novoPost, ...atual]);
+    if (marcados && marcados.length > 0) {
+      setMarcacoesPorPost((atual) => ({
+        ...atual,
+        [novoPost.id]: marcados.map((m) => m.user_id),
+      }));
+      setPerfisMarcados((atual) => {
+        const novo = { ...atual };
+        for (const m of marcados) if (!novo[m.user_id]) novo[m.user_id] = m;
+        return novo;
+      });
+    }
     fecharPostarModal();
   }
 
   function resolverAutorPost(autorId) {
     if (autorId === session.user.id) return perfilProprio;
     return perfisPorId[autorId] || null;
+  }
+
+  function resolverPerfilMarcado(usuarioId) {
+    if (usuarioId === session.user.id) return perfilProprio;
+    return perfisPorId[usuarioId] || perfisMarcados[usuarioId] || null;
   }
 
   function extrairCaminhoStorage(url) {
@@ -1645,6 +1697,21 @@ export default function Filmoteca() {
                           <p className="text-sm px-3 pb-3 break-words">{post.legenda}</p>
                         )}
 
+                        {(marcacoesPorPost[post.id] || []).length > 0 && (
+                          <p className="text-xs text-[#8A857C] px-3 pb-3 -mt-2 break-words">
+                            com{" "}
+                            {marcacoesPorPost[post.id].map((usuarioId, i) => {
+                              const perfilMarcado = resolverPerfilMarcado(usuarioId);
+                              return (
+                                <span key={usuarioId} className="text-[#D97757]">
+                                  @{perfilMarcado?.nick || "..."}
+                                  {i < marcacoesPorPost[post.id].length - 1 ? ", " : ""}
+                                </span>
+                              );
+                            })}
+                          </p>
+                        )}
+
                         {postComentariosAberto === post.id && (
                           <div className="border-t border-[#2A2622] p-3">
                             <div className="mb-3">
@@ -2133,6 +2200,7 @@ export default function Filmoteca() {
           visivel={postarModalVisivel}
           onClose={fecharPostarModal}
           sessionUserId={session.user.id}
+          accessToken={session.access_token}
           onPostado={handlePostado}
         />
       )}
@@ -2143,6 +2211,7 @@ export default function Filmoteca() {
           onClose={fecharNotificacoes}
           sessionUserId={session.user.id}
           onAbrirFilme={abrirComentariosPorId}
+          onIrParaFeed={() => setAba("feed")}
         />
       )}
 
