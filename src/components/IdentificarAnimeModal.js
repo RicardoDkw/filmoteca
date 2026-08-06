@@ -1,0 +1,183 @@
+"use client";
+
+import { useState } from "react";
+import { Camera, X } from "lucide-react";
+import { redimensionarImagem } from "@/lib/imagem";
+
+const SIMILARIDADE_CONFIANTE = 0.85;
+
+export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado }) {
+  const [preview, setPreview] = useState("");
+  const [identificando, setIdentificando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [resultado, setResultado] = useState(null);
+
+  function limpar() {
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview("");
+    setErro("");
+    setResultado(null);
+  }
+
+  function fechar() {
+    if (identificando) return;
+    limpar();
+    onClose();
+  }
+
+  async function identificar(file) {
+    setErro("");
+    setResultado(null);
+    setIdentificando(true);
+    try {
+      const blob = await redimensionarImagem(file, 800);
+      const formData = new FormData();
+      formData.append("image", blob, "cena.jpg");
+      const res = await fetch("/api/identificar-anime", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível identificar a cena.");
+      setResultado(data);
+    } catch (err) {
+      console.error("Erro ao identificar anime:", err);
+      setErro("Não foi possível identificar a cena. Tente novamente.");
+    }
+    setIdentificando(false);
+  }
+
+  function handleArquivo(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (preview) URL.revokeObjectURL(preview);
+    setErro("");
+    setResultado(null);
+    setPreview(URL.createObjectURL(file));
+    identificar(file);
+  }
+
+  function continuar() {
+    if (!resultado?.titulo) return;
+    const titulo = resultado.titulo;
+    limpar();
+    onClose();
+    onIdentificado(titulo);
+  }
+
+  return (
+    <div
+      className={`fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 transition-opacity duration-[250ms] ${
+        visivel ? "opacity-100" : "opacity-0 pointer-events-none"
+      }`}
+    >
+      <div
+        className={`bg-[#1B1815] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md border border-[#2A2622] max-h-[85vh] overflow-y-auto transition-all duration-[250ms] ease-out ${
+          visivel
+            ? "translate-y-0 sm:scale-100 opacity-100"
+            : "translate-y-full sm:translate-y-0 sm:scale-95 opacity-0"
+        }`}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Identificar Anime</h2>
+          <button onClick={fechar} disabled={identificando}>
+            <X className="w-4 h-4 text-[#8A857C]" />
+          </button>
+        </div>
+
+        {!preview ? (
+          <>
+            <p className="text-xs text-[#8A857C] mb-4">
+              Tire uma foto ou envie uma imagem de uma cena de anime pra descobrir o nome.
+            </p>
+            <label className="flex flex-col items-center justify-center gap-2 aspect-square rounded-lg border border-dashed border-[#2A2622] hover:border-[#D97757] transition cursor-pointer">
+              <Camera className="w-8 h-8 text-[#8A857C]" />
+              <span className="text-sm text-[#8A857C]">Tirar foto ou escolher imagem</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleArquivo}
+                className="hidden"
+              />
+            </label>
+          </>
+        ) : (
+          <div>
+            <img
+              src={preview}
+              alt="Cena enviada"
+              className="w-full aspect-square object-cover rounded-lg mb-4"
+            />
+
+            {identificando && (
+              <div className="flex items-center justify-center gap-2 py-4">
+                <div className="w-4 h-4 border-2 border-[#2A2622] border-t-[#D97757] rounded-full animate-spin" />
+                <span className="text-xs text-[#8A857C]">Identificando cena...</span>
+              </div>
+            )}
+
+            {erro && (
+              <div className="text-center py-2">
+                <p className="text-xs text-red-400 mb-3">{erro}</p>
+                <button
+                  onClick={limpar}
+                  className="w-full border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-lg hover:border-[#D97757] hover:scale-[1.02] transition"
+                >
+                  Tentar outra imagem
+                </button>
+              </div>
+            )}
+
+            {resultado && !resultado.encontrado && (
+              <div className="text-center py-2">
+                <p className="text-sm text-[#F1EEE6] mb-1">
+                  Não conseguimos identificar essa cena.
+                </p>
+                <p className="text-xs text-[#8A857C] mb-4">
+                  Tente uma imagem mais nítida, de preferência sem legendas ou bordas.
+                </p>
+                <button
+                  onClick={limpar}
+                  className="w-full border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-lg hover:border-[#D97757] hover:scale-[1.02] transition"
+                >
+                  Tentar outra imagem
+                </button>
+              </div>
+            )}
+
+            {resultado?.encontrado && (
+              <div>
+                {resultado.similaridade < SIMILARIDADE_CONFIANTE ? (
+                  <p className="text-sm text-[#D97757] mb-1">
+                    Não tenho certeza, mas pode ser:{" "}
+                    <span className="font-medium">{resultado.titulo}</span>
+                  </p>
+                ) : (
+                  <p className="text-sm mb-1">
+                    Encontramos:{" "}
+                    <span className="font-medium text-[#D97757]">{resultado.titulo}</span>
+                  </p>
+                )}
+                <p className="text-[10px] text-[#8A857C] mb-4">
+                  {Math.round(resultado.similaridade * 100)}% de similaridade
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={limpar}
+                    className="flex-1 border border-[#2A2622] text-[#F1EEE6] font-medium py-2 rounded-lg hover:border-[#D97757] hover:scale-[1.02] transition"
+                  >
+                    Tentar outra
+                  </button>
+                  <button
+                    onClick={continuar}
+                    className="flex-1 bg-[#D97757] text-[#12100E] font-medium py-2 rounded-lg hover:bg-[#e5896d] hover:scale-[1.02] hover:shadow-lg hover:shadow-[#D97757]/20 transition"
+                  >
+                    Buscar na Filmoteca
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

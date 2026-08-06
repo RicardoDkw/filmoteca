@@ -30,6 +30,7 @@ import ComentariosFilmeModal from "@/components/ComentariosFilmeModal";
 import NotificacoesModal from "@/components/NotificacoesModal";
 import AvaliarModal from "@/components/AvaliarModal";
 import PostarModal from "@/components/PostarModal";
+import IdentificarAnimeModal from "@/components/IdentificarAnimeModal";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
 import ToastConquistas from "@/components/ToastConquistas";
@@ -147,6 +148,8 @@ export default function Filmoteca() {
   const [paginaGenero, setPaginaGenero] = useState(1);
   const [carregandoMaisGenero, setCarregandoMaisGenero] = useState(false);
   const [semMaisGenero, setSemMaisGenero] = useState(false);
+  const [identificarModalAberto, setIdentificarModalAberto] = useState(false);
+  const [identificarModalVisivel, setIdentificarModalVisivel] = useState(false);
   const [buscaNickAmigo, setBuscaNickAmigo] = useState("");
   const [buscandoAmigo, setBuscandoAmigo] = useState(false);
   const [erroBuscaAmigo, setErroBuscaAmigo] = useState("");
@@ -914,6 +917,21 @@ export default function Filmoteca() {
     }, 250);
   }
 
+  function abrirIdentificarModal() {
+    setIdentificarModalAberto(true);
+    requestAnimationFrame(() => setIdentificarModalVisivel(true));
+  }
+
+  function fecharIdentificarModal() {
+    setIdentificarModalVisivel(false);
+    setTimeout(() => setIdentificarModalAberto(false), 250);
+  }
+
+  function handleAnimeIdentificado(titulo) {
+    setBusca(titulo);
+    abrirModalAdicionar();
+  }
+
   function abrirDetalhe(filme) {
     setDetalheAberto(filme);
     requestAnimationFrame(() => setDetalheVisivel(true));
@@ -1544,6 +1562,12 @@ export default function Filmoteca() {
           ) : aba === "descobrir" ? (
             <div>
               <SectionTitle icon={Compass}>Descobrir</SectionTitle>
+              <button
+                onClick={abrirIdentificarModal}
+                className="w-full mb-3 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg bg-[#1B1815] border border-[#2A2622] hover:border-[#D97757] hover:scale-[1.01] transition"
+              >
+                📷 Identificar Anime
+              </button>
               <div className="flex gap-1.5 overflow-x-auto pb-2 mb-1">
                 <button
                   onClick={() => selecionarGenero("anime")}
@@ -2370,6 +2394,14 @@ export default function Filmoteca() {
           visivel={roletaVisivel}
           onClose={fecharRoleta}
           onVerDetalhes={verDetalhesDaRoleta}
+        />
+      )}
+
+      {identificarModalAberto && (
+        <IdentificarAnimeModal
+          visivel={identificarModalVisivel}
+          onClose={fecharIdentificarModal}
+          onIdentificado={handleAnimeIdentificado}
         />
       )}
 
