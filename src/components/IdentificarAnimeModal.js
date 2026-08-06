@@ -126,7 +126,6 @@ export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={handleArquivo}
                 className="hidden"
               />
