@@ -39,7 +39,16 @@ function limparTituloParaBusca(titulo) {
   return limpo || titulo;
 }
 
-export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado }) {
+function blobParaBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+    leitor.onload = () => resolve(leitor.result.split(",")[1]);
+    leitor.readAsDataURL(blob);
+  });
+}
+
+export default function IdentificarModal({ visivel, onClose, onIdentificado }) {
   const [preview, setPreview] = useState("");
   const [identificando, setIdentificando] = useState(false);
   const [erro, setErro] = useState("");
@@ -64,15 +73,52 @@ export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado
     setIdentificando(true);
     try {
       const blob = await redimensionarImagem(file, 800);
+
+      // 1ª tentativa: trace.moe (rápido, gratuito, especializado em anime)
       const formData = new FormData();
       formData.append("image", blob, "cena.jpg");
-      const res = await fetch("/api/identificar-anime", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível identificar a cena.");
-      setResultado(data);
+      const resTrace = await fetch("/api/identificar-anime", { method: "POST", body: formData });
+      const dataTrace = await resTrace.json();
+      if (!resTrace.ok) throw new Error(dataTrace.error || "Não foi possível identificar a cena.");
+
+      if (dataTrace.encontrado && dataTrace.similaridade >= SIMILARIDADE_CONFIANTE) {
+        setResultado({
+          encontrado: true,
+          titulo: dataTrace.titulo,
+          similaridade: dataTrace.similaridade,
+          fonte: "trace",
+        });
+        setIdentificando(false);
+        return;
+      }
+
+      // trace.moe não achou com confiança (ou a cena nem é de anime): reforça com IA de visão
+      const base64 = await blobParaBase64(blob);
+      const resIa = await fetch("/api/identificar-com-ia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imagemBase64: base64, mediaType: "image/jpeg" }),
+      });
+      const dataIa = await resIa.json();
+      if (!resIa.ok) throw new Error(dataIa.error || "Não foi possível identificar a cena.");
+
+      if (dataIa.encontrado) {
+        setResultado({ encontrado: true, titulo: dataIa.titulo, fonte: "ia" });
+      } else if (dataTrace.encontrado) {
+        // IA também não confirmou nada: melhor mostrar o palpite de baixa confiança
+        // do trace.moe do que nada
+        setResultado({
+          encontrado: true,
+          titulo: dataTrace.titulo,
+          similaridade: dataTrace.similaridade,
+          fonte: "trace",
+        });
+      } else {
+        setResultado({ encontrado: false });
+      }
     } catch (err) {
-      console.error("Erro ao identificar anime:", err);
-      setErro("Não foi possível identificar a cena. Tente novamente.");
+      console.error("Erro ao identificar cena:", err);
+      setErro(err.message || "Não foi possível identificar a cena. Tente novamente.");
     }
     setIdentificando(false);
   }
@@ -109,7 +155,7 @@ export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado
         }`}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Identificar Anime</h2>
+          <h2 className="text-xl font-bold">Identificar Filme/Série/Anime</h2>
           <button onClick={fechar} disabled={identificando}>
             <X className="w-4 h-4 text-[#8A857C]" />
           </button>
@@ -118,7 +164,8 @@ export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado
         {!preview ? (
           <>
             <p className="text-xs text-[#8A857C] mb-4">
-              Tire uma foto ou envie uma imagem de uma cena de anime pra descobrir o nome.
+              Tire uma foto ou envie uma imagem de uma cena de filme, série ou anime pra
+              descobrir o nome.
             </p>
             <label className="flex flex-col items-center justify-center gap-2 aspect-square rounded-lg border border-dashed border-[#2A2622] hover:border-[#D97757] transition cursor-pointer">
               <Camera className="w-8 h-8 text-[#8A857C]" />
@@ -177,19 +224,28 @@ export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado
 
             {resultado?.encontrado && (
               <div>
-                {resultado.similaridade < SIMILARIDADE_CONFIANTE ? (
-                  <p className="text-sm text-[#D97757] mb-1">
-                    Não tenho certeza, mas pode ser:{" "}
-                    <span className="font-medium">{resultado.titulo}</span>
-                  </p>
+                {resultado.fonte === "trace" ? (
+                  resultado.similaridade < SIMILARIDADE_CONFIANTE ? (
+                    <p className="text-sm text-[#D97757] mb-1">
+                      Não tenho certeza, mas pode ser:{" "}
+                      <span className="font-medium">{resultado.titulo}</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm mb-1">
+                      Encontramos:{" "}
+                      <span className="font-medium text-[#D97757]">{resultado.titulo}</span>
+                    </p>
+                  )
                 ) : (
                   <p className="text-sm mb-1">
-                    Encontramos:{" "}
+                    Identificamos:{" "}
                     <span className="font-medium text-[#D97757]">{resultado.titulo}</span>
                   </p>
                 )}
                 <p className="text-[10px] text-[#8A857C] mb-4">
-                  {Math.round(resultado.similaridade * 100)}% de similaridade
+                  {resultado.fonte === "trace"
+                    ? `${Math.round(resultado.similaridade * 100)}% de similaridade`
+                    : "identificado com IA"}
                 </p>
                 <div className="flex gap-2">
                   <button

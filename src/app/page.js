@@ -30,7 +30,7 @@ import ComentariosFilmeModal from "@/components/ComentariosFilmeModal";
 import NotificacoesModal from "@/components/NotificacoesModal";
 import AvaliarModal from "@/components/AvaliarModal";
 import PostarModal from "@/components/PostarModal";
-import IdentificarAnimeModal from "@/components/IdentificarAnimeModal";
+import IdentificarModal from "@/components/IdentificarModal";
 import Onboarding from "@/components/Onboarding";
 import Roleta from "@/components/Roleta";
 import ToastConquistas from "@/components/ToastConquistas";
@@ -927,7 +927,7 @@ export default function Filmoteca() {
     setTimeout(() => setIdentificarModalAberto(false), 250);
   }
 
-  function handleAnimeIdentificado(titulo) {
+  function handleTituloIdentificado(titulo) {
     setBusca(titulo);
     abrirModalAdicionar();
   }
@@ -1566,7 +1566,7 @@ export default function Filmoteca() {
                 onClick={abrirIdentificarModal}
                 className="w-full mb-3 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg bg-[#1B1815] border border-[#2A2622] hover:border-[#D97757] hover:scale-[1.01] transition"
               >
-                📷 Identificar Anime
+                📷 Identificar Filme/Série/Anime
               </button>
               <div className="flex gap-1.5 overflow-x-auto pb-2 mb-1">
                 <button
@@ -2398,10 +2398,10 @@ export default function Filmoteca() {
       )}
 
       {identificarModalAberto && (
-        <IdentificarAnimeModal
+        <IdentificarModal
           visivel={identificarModalVisivel}
           onClose={fecharIdentificarModal}
-          onIdentificado={handleAnimeIdentificado}
+          onIdentificado={handleTituloIdentificado}
         />
       )}
 
