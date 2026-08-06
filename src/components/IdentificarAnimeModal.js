@@ -6,6 +6,39 @@ import { redimensionarImagem } from "@/lib/imagem";
 
 const SIMILARIDADE_CONFIANTE = 0.85;
 
+// remove sufixos comuns de temporada/parte (ex: "Final Season Part 2", "2nd Season",
+// "Cour 2") que o AniList inclui no título mas o TMDb geralmente não cataloga —
+// aplica em loop porque alguns títulos empilham mais de um sufixo
+const SUFIXOS_TEMPORADA = [
+  /[\s:–-]+(the\s+)?final\s+season(\s+part\s*\d+)?\s*$/i,
+  /[\s:–-]+\d+(st|nd|rd|th)\s+season(\s+part\s*\d+)?\s*$/i,
+  /[\s:–-]+season\s*\d+(\s+part\s*\d+)?\s*$/i,
+  /[\s:–-]+season(\s+part\s*\d+)?\s*$/i,
+  /[\s:–-]+part\s*\d+\s*$/i,
+  /[\s:–-]+cour\s*\d+\s*$/i,
+];
+// numeral romano solto no final (ex: "Youjo Senki II" -> "Youjo Senki")
+const SUFIXO_ROMANO = /[\s:–-]+(X{1,3}|IX|IV|V?I{1,3})\s*$/;
+
+function limparTituloParaBusca(titulo) {
+  if (!titulo) return titulo;
+  let limpo = titulo.trim();
+  let alterado = true;
+  while (alterado) {
+    alterado = false;
+    for (const padrao of SUFIXOS_TEMPORADA) {
+      const semSufixo = limpo.replace(padrao, "").trim();
+      if (semSufixo !== limpo && semSufixo.length > 0) {
+        limpo = semSufixo;
+        alterado = true;
+      }
+    }
+  }
+  const semRomano = limpo.replace(SUFIXO_ROMANO, "").trim();
+  if (semRomano.length > 0) limpo = semRomano;
+  return limpo || titulo;
+}
+
 export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado }) {
   const [preview, setPreview] = useState("");
   const [identificando, setIdentificando] = useState(false);
@@ -56,10 +89,10 @@ export default function IdentificarAnimeModal({ visivel, onClose, onIdentificado
 
   function continuar() {
     if (!resultado?.titulo) return;
-    const titulo = resultado.titulo;
+    const tituloBusca = limparTituloParaBusca(resultado.titulo);
     limpar();
     onClose();
-    onIdentificado(titulo);
+    onIdentificado(tituloBusca);
   }
 
   return (
