@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const MODELO = "claude-haiku-4-5-20251001";
+const MODELO = "claude-sonnet-5";
 const PROMPT =
   "Identifique o filme, série ou anime dessa cena. Responda APENAS com o nome do título " +
   "(o mais reconhecível possível, em português ou no idioma original), sem explicações e " +
